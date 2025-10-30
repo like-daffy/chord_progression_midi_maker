@@ -29,10 +29,22 @@ from midiutil import MIDIFile
 
 # Import audio libraries for preview functionality
 try:
-    import pygame
+    # Avoid importing pygame.sndarray which pulls in numpy
+    import os
+    os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+    
+    # Import only the mixer module to avoid numpy dependency
+    import pygame.mixer as mixer
+    
     # Initialize mixer without requesting microphone access
-    pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+    mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
     PYGAME_AVAILABLE = True
+    
+    # Create a dummy pygame module reference for compatibility
+    class PygameCompat:
+        mixer = mixer
+    pygame = PygameCompat()
+    
 except ImportError:
     PYGAME_AVAILABLE = False
     print("Warning: pygame not installed. MIDI preview will not be available.")
@@ -61,14 +73,14 @@ class MidiPlayerThread(QThread):
             return
             
         try:
-            pygame.mixer.music.load(self.midi_file)
-            pygame.mixer.music.play()
+            mixer.music.load(self.midi_file)
+            mixer.music.play()
             self.is_playing = True
             
             # Wait while the music is playing
-            while pygame.mixer.music.get_busy():
+            while mixer.music.get_busy():
                 if not self.is_playing:
-                    pygame.mixer.music.stop()
+                    mixer.music.stop()
                     break
                 time.sleep(0.1)
             
@@ -80,7 +92,7 @@ class MidiPlayerThread(QThread):
         """Stop playing."""
         self.is_playing = False
         if PYGAME_AVAILABLE:
-            pygame.mixer.music.stop()
+            mixer.music.stop()
 
 
 class DraggableMidiDisplay(QTextEdit):

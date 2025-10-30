@@ -1,11 +1,14 @@
 #!/bin/bash
 
-# Build script for Chord to MIDI Converter (PyQt6) - macOS
-# This script builds a standalone macOS application bundle with PyQt6
+# Build script for Chord to MIDI Converter v1.0 - macOS
+# No microphone permissions required
 
 echo "============================================"
-echo "Chord to MIDI Converter (PyQt6) - macOS Build"
+echo " Chord to MIDI Converter v1.0 - macOS Build"
 echo "============================================"
+echo
+echo " No microphone permissions required"
+echo " Playback only - no recording"
 echo
 
 # Check if Python 3 is installed
@@ -29,39 +32,44 @@ if [ "$(printf '%s\n' "$required_version" "$python_version" | sort -V | head -n1
     exit 1
 fi
 
-# Create virtual environment (recommended for clean build)
-echo "Creating virtual environment..."
-python3 -m venv build_env_qt
-source build_env_qt/bin/activate
+echo "Installing dependencies..."
+echo
 
 # Upgrade pip first
-echo "Upgrading pip..."
-pip install --upgrade pip
+python3 -m pip install --upgrade pip
 
-# Install dependencies
-echo "Installing required dependencies..."
-pip install -r requirements_qt.txt
+# Install core requirements
+echo "Installing core requirements..."
+pip3 install PyQt6>=6.6.1 midiutil==1.2.1
 if [ $? -ne 0 ]; then
-    echo "ERROR: Failed to install dependencies"
-    echo ""
-    echo "If PyQt6 installation fails, try:"
-    echo "  pip install --upgrade pip setuptools wheel"
-    echo "  pip install PyQt6 midiutil pyinstaller"
-    deactivate
+    echo "ERROR: Failed to install core dependencies"
+    exit 1
+fi
+
+echo "Installing pygame for preview..."
+pip3 install pygame==2.5.2
+if [ $? -ne 0 ]; then
+    echo "WARNING: pygame installation failed - Preview will be disabled"
+fi
+
+echo "Installing PyInstaller..."
+pip3 install pyinstaller==6.3.0
+if [ $? -ne 0 ]; then
+    echo "ERROR: Failed to install PyInstaller"
     exit 1
 fi
 
 echo
-echo "Building macOS application bundle with PyQt6..."
+echo "Building macOS application bundle..."
 echo
 
 # Clean previous builds
-rm -rf dist build
+rm -rf dist build ChordToMIDI.spec
 
-# Build using PyInstaller with PyQt6-specific options
+# Build using PyInstaller with exclusions
 pyinstaller --onefile --windowed \
-    --name "ChordToMIDI_Qt" \
-    --osx-bundle-identifier "com.chordtomidi.converter.qt" \
+    --name "ChordToMIDI" \
+    --osx-bundle-identifier "com.chordtomidi.converter" \
     --distpath "./dist" \
     --workpath "./build" \
     --specpath "." \
@@ -70,36 +78,36 @@ pyinstaller --onefile --windowed \
     --hidden-import "PyQt6.QtGui" \
     --hidden-import "PyQt6.QtWidgets" \
     --hidden-import "midiutil" \
+    --hidden-import "pygame.mixer" \
+    --hidden-import "pygame.mixer_music" \
+    --exclude-module "pygame.sndarray" \
+    --exclude-module "pygame.surfarray" \
+    --exclude-module "pygame.camera" \
+    --exclude-module "pygame.freetype" \
+    --exclude-module "numpy" \
+    --exclude-module "numpy.core" \
+    --exclude-module "scipy" \
     --icon "chord_to_midi.ico" \
-    --add-data "README_Qt.md:." \
-    chord_to_midi_converter_qt.py
+    --add-data "README.md:." \
+    chord_to_midi_converter.py
 
 if [ $? -ne 0 ]; then
     echo
     echo "ERROR: Build failed"
-    echo "Common issues:"
-    echo "- Ensure PyQt6 is properly installed"
-    echo "- Try: pip install --upgrade PyQt6"
-    echo "- Check all dependencies are satisfied"
-    deactivate
+    echo
+    echo "Troubleshooting:"
+    echo "1. Ensure all dependencies are installed"
+    echo "2. Try running: pip3 install --upgrade PyQt6 pygame"
+    echo "3. Check for permission issues"
     exit 1
 fi
 
-# Create a proper macOS app bundle structure
-if [ -f "dist/ChordToMIDI_Qt" ]; then
+# Create Info.plist for the app bundle
+if [ -d "dist/ChordToMIDI.app" ]; then
     echo
-    echo "Creating application bundle..."
+    echo "Configuring application bundle..."
     
-    # Create app bundle structure
-    mkdir -p "dist/ChordToMIDI_Qt.app/Contents/MacOS"
-    mkdir -p "dist/ChordToMIDI_Qt.app/Contents/Resources"
-    mkdir -p "dist/ChordToMIDI_Qt.app/Contents/Frameworks"
-    
-    # Move executable to app bundle
-    mv "dist/ChordToMIDI_Qt" "dist/ChordToMIDI_Qt.app/Contents/MacOS/"
-    
-    # Create Info.plist with PyQt6 specific settings
-    cat > "dist/ChordToMIDI_Qt.app/Contents/Info.plist" << EOF
+    cat > "dist/ChordToMIDI.app/Contents/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -107,25 +115,25 @@ if [ -f "dist/ChordToMIDI_Qt" ]; then
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleExecutable</key>
-    <string>ChordToMIDI_Qt</string>
+    <string>ChordToMIDI</string>
     <key>CFBundleIdentifier</key>
-    <string>com.chordtomidi.converter.qt</string>
+    <string>com.chordtomidi.converter</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>ChordToMIDI Qt</string>
+    <string>ChordToMIDI</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>2.0.0</string>
+    <string>1.0.0</string>
     <key>CFBundleVersion</key>
-    <string>2</string>
+    <string>1</string>
     <key>LSMinimumSystemVersion</key>
     <string>10.12</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSHumanReadableCopyright</key>
-    <string>Chord to MIDI Converter (PyQt6) © 2024</string>
+    <string>Chord to MIDI Converter © 2024</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSSupportsAutomaticGraphicsSwitching</key>
@@ -135,34 +143,32 @@ if [ -f "dist/ChordToMIDI_Qt" ]; then
 EOF
     
     # Make executable
-    chmod +x "dist/ChordToMIDI_Qt.app/Contents/MacOS/ChordToMIDI_Qt"
-    
-    # Code sign the app (if certificate is available)
-    # Uncomment the following line if you have a developer certificate
-    # codesign --force --deep --sign "Developer ID Application: Your Name" "dist/ChordToMIDI_Qt.app"
+    chmod +x "dist/ChordToMIDI.app/Contents/MacOS/ChordToMIDI"
     
     echo
     echo "============================================"
-    echo "Build completed successfully!"
+    echo " Build completed successfully!"
+    echo "============================================"
     echo
-    echo "Application location: dist/ChordToMIDI_Qt.app"
+    echo "Application: dist/ChordToMIDI.app"
+    echo "Size: ~50 MB (includes all features)"
     echo
-    echo "Features of PyQt6 version:"
-    echo "- Modern, native macOS interface"
-    echo "- Enhanced drag-and-drop support"
-    echo "- Better Retina display support"
-    echo "- Improved performance"
+    echo "Version 1.0 Features:"
+    echo "  ✓ Extended octave range (2-7, default 4)"
+    echo "  ✓ Fixed bass note handling"
+    echo "  ✓ BPM Control (1-300)"
+    echo "  ✓ MIDI Preview (no mic access needed)"
+    echo "  ✓ Drag-to-save functionality"
+    echo "  ✓ Cmaj7 chord support"
     echo
-    echo "You can now run the application by:"
-    echo "  1. Double-clicking dist/ChordToMIDI_Qt.app in Finder"
-    echo "  2. Or from Terminal: open dist/ChordToMIDI_Qt.app"
+    echo "To run: Double-click dist/ChordToMIDI.app"
     echo
-    echo "To distribute the app, you can:"
-    echo "  - Compress it: zip -r ChordToMIDI_Qt.zip dist/ChordToMIDI_Qt.app"
-    echo "  - Create a DMG: hdiutil create -srcfolder dist/ChordToMIDI_Qt.app ChordToMIDI_Qt.dmg"
+    echo "To distribute:"
+    echo "  - Create ZIP: zip -r ChordToMIDI.zip dist/ChordToMIDI.app"
+    echo "  - Create DMG: hdiutil create -srcfolder dist/ChordToMIDI.app ChordToMIDI.dmg"
+    echo
+    echo "IMPORTANT: No microphone permissions required!"
+    echo "This app uses audio output only."
     echo "============================================"
     echo
 fi
-
-# Deactivate virtual environment
-deactivate

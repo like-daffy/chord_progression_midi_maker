@@ -27,7 +27,7 @@ python -m pip install --upgrade pip
 
 REM Install core requirements
 echo Installing core requirements...
-pip install PyQt6==6.6.1 midiutil==1.2.1
+pip install PyQt6>=6.6.1 midiutil==1.2.1
 if %errorlevel% neq 0 (
     echo ERROR: Failed to install core dependencies
     pause
@@ -67,11 +67,18 @@ pyinstaller --onefile --windowed ^
     --hidden-import "PyQt6.QtGui" ^
     --hidden-import "PyQt6.QtWidgets" ^
     --hidden-import "midiutil" ^
-    --hidden-import "pygame" ^
     --hidden-import "pygame.mixer" ^
-    --add-data "README_v1.md;." ^
+    --hidden-import "pygame.mixer_music" ^
+    --exclude-module "pygame.sndarray" ^
+    --exclude-module "pygame.surfarray" ^
+    --exclude-module "pygame.camera" ^
+    --exclude-module "pygame.freetype" ^
+    --exclude-module "numpy" ^
+    --exclude-module "numpy.core" ^
+    --exclude-module "scipy" ^
+    --add-data "README.md;." ^
     --icon "chord_to_midi.ico" ^
-    chord_to_midi_converter_qt_v1.py
+    chord_to_midi_converter.py
 
 if %errorlevel% neq 0 (
     echo.
