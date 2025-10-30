@@ -87,7 +87,7 @@ pyinstaller --onefile --windowed \
     --exclude-module "numpy" \
     --exclude-module "numpy.core" \
     --exclude-module "scipy" \
-    --icon "chord_to_midi.ico" \
+    --icon "chord_to_midi.icns" \
     --add-data "README.md:." \
     chord_to_midi_converter.py
 
