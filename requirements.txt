@@ -1,0 +1,37 @@
+# Requirements for Chord to MIDI Converter (PyQt6 Version 2.0)
+# Install with: pip install -r requirements.txt
+
+# Core Dependencies
+# -----------------
+
+# MIDI file creation library
+midiutil==1.2.1
+
+# PyQt6 for graphical user interface
+PyQt6>=6.6.1
+
+# Audio and MIDI Playback
+# ------------------------
+
+# pygame for MIDI playback (required for preview feature)
+pygame==2.5.2
+
+# sounddevice for audio device enumeration (optional but recommended)
+sounddevice==0.4.6
+
+# numpy is required by sounddevice
+numpy>=1.24.3
+
+# Development Dependencies (optional)
+# ------------------------------------
+
+# For building executables
+pyinstaller>=6.3.0
+
+# Installation Notes:
+# -------------------
+# 1. Core functionality requires only midiutil and PyQt6
+# 2. Preview functionality requires pygame
+# 3. Audio device selection enhanced with sounddevice
+# 4. For minimal installation without preview: pip install midiutil PyQt6
+# 5. For full features: pip install -r requirements.txt
