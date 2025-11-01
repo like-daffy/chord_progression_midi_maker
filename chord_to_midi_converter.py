@@ -214,6 +214,11 @@ class ChordToMIDIQt(QMainWindow):
             'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 
             'Ab': 'G#', 'Bb': 'A#', 'Cb': 'B'
         }
+
+        # Enharmonic equivalents for uncommon notations
+        self.enharmonic_equivalents = {
+            'E#': 'F', 'Fb': 'E', 'B#': 'C', 'Cb': 'B'
+        }
         
         self.chord_data = {}
         self.current_midi_file = None
@@ -561,6 +566,46 @@ Cm13,023579a,"""
         pattern = r'([A-G][#b]?)min'
         return re.sub(pattern, r'\1m', chord_str)
     
+    def remove_parentheses(self, chord_str: str) -> str:
+        """Remove parentheses from chord notation.
+        
+        Examples:
+            Cm11(b13) -> Cm11b13
+            C7(#9) -> C7#9
+            Dm7(add11) -> Dm7add11
+        """
+        return chord_str.replace('(', '').replace(')', '')
+
+    def convert_enharmonic(self, chord_str: str) -> str:
+        """Convert uncommon enharmonic equivalents to standard notation.
+        
+        Examples:
+            E# -> F
+            Fb -> E
+            B# -> C
+            Cb -> B
+        """
+        for enharmonic, standard in self.enharmonic_equivalents.items():
+            if chord_str.startswith(enharmonic):
+                # Replace only at the start (the root note)
+                suffix = chord_str[len(enharmonic):]
+                chord_str = standard + suffix
+                break
+        
+        # Also handle in slash chords (bass note)
+        if '/' in chord_str:
+            parts = chord_str.split('/')
+            main_chord = parts[0]
+            bass_note = parts[1]
+            
+            # Convert bass note if it's an enharmonic equivalent
+            if bass_note in self.enharmonic_equivalents:
+                bass_note = self.enharmonic_equivalents[bass_note]
+                chord_str = main_chord + '/' + bass_note
+        
+        return chord_str
+
+
     def convert_flat_to_sharp(self, note: str) -> str:
         """Convert flat notation to sharp notation."""
         if len(note) >= 2 and note[1] == 'b':
@@ -641,12 +686,18 @@ Cm13,023579a,"""
     
     def get_chord_notes(self, chord_str: str, octave: int) -> Optional[List[int]]:
         """Get MIDI notes for a chord string."""
+        # Remove parentheses from chord notation
+        chord_str = self.remove_parentheses(chord_str)
+        
+        # Convert uncommon enharmonic equivalents
+        chord_str = self.convert_enharmonic(chord_str)
+        
         # Convert 'min' notation to 'm' notation
         chord_str = self.convert_min_to_m(chord_str)
-    
+        
         # Parse chord and bass note
         main_chord, bass_note_str = self.parse_chord_with_bass(chord_str)
-
+        
         # Normalize chord name
         chord_parts = self.normalize_chord_name(main_chord)
         if not chord_parts:
@@ -673,7 +724,7 @@ Cm13,023579a,"""
             base_chord = 'C'
             if base_chord in self.chord_data:
                 QMessageBox.warning(self, "Chord Not Found", 
-                                   f"Chord '{main_chord}' not found. Using basic chord instead.")
+                                f"Chord '{main_chord}' not found. Using basic chord instead.")
                 chord_info = self.chord_data[base_chord]
             else:
                 return None
