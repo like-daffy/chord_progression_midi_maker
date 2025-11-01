@@ -264,7 +264,22 @@ C7+5,048a,
 CM7-5,046b,
 Cm7+5,038a,
 C11,047ah,
-C4.4,05af,"""
+C4.4,05af,
+C7b13,0478a,
+C7add9,0247a,
+C7sus2,027a,
+C7susb5,046a,
+Cm7b5,036a,
+Cm7b9,0137a,
+Cm7-11,0357a,
+Cm7add9,0237a,
+Cm7add11,0357a,
+Cdim,036,
+Cm11,02357a,
+Cm11b13,023578a,
+Cm11b9,01357a,
+Cm11b9b13,013578a,
+Cm13,023579a,"""
         
         # Parse CSV data
         lines = csv_content.strip().split('\n')
