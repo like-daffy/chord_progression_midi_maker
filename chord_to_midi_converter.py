@@ -519,6 +519,21 @@ Cm13,023579a,"""
         midi_group.setLayout(midi_layout)
         main_layout.addWidget(midi_group)
         
+        # Footer section
+        footer_layout = QHBoxLayout()
+        footer_layout.addStretch()
+        
+        copyright_label = QLabel('Copyright © 2025 Sochan, X (Twitter): <a href="#" style="color: #1DA1F2; text-decoration: none;">@sochan_life</a> For personal use')
+        copyright_label.setStyleSheet("color: #666; font-size: 14px;")
+        copyright_label.setOpenExternalLinks(False)
+        copyright_label.linkActivated.connect(lambda: self.open_twitter())
+        copyright_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        footer_layout.addWidget(copyright_label)
+        footer_layout.addStretch()
+        
+        main_layout.addLayout(footer_layout)
+        
         # Set up keyboard shortcuts
         self.chord_input.returnPressed.connect(self.process_chords)
     
@@ -1015,6 +1030,11 @@ Cm13,023579a,"""
         if message:
             # Clear message after 3 seconds
             QTimer.singleShot(3000, lambda: self.status_label.setText(""))
+    
+    def open_twitter(self):
+        """Open Twitter profile in default browser."""
+        import webbrowser
+        webbrowser.open("https://x.com/sochan_life")
 
 
 def main():
