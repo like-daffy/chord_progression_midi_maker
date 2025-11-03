@@ -1,12 +1,25 @@
-# Build script for Chord to MIDI Converter v1.0 - PowerShell
+# Build script for Chord to MIDI Converter - PowerShell
 # No microphone permissions required
 
 Write-Host "============================================" -ForegroundColor Cyan
-Write-Host " Chord to MIDI Converter v1.0 - Windows Build" -ForegroundColor Cyan
+Write-Host " Chord to MIDI Converter - Windows Build" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host " No microphone permissions required" -ForegroundColor Green
 Write-Host " Playback only - no recording" -ForegroundColor Green
+Write-Host ""
+
+# Ask for version
+$VERSION = Read-Host "Enter version number (e.g., 1.0, 1.1, 2.0)"
+if ([string]::IsNullOrWhiteSpace($VERSION)) {
+    Write-Host "ERROR: Version number cannot be empty" -ForegroundColor Red
+    Read-Host "Press Enter to exit"
+    exit 1
+}
+
+Write-Host ""
+Write-Host "Building version: $VERSION" -ForegroundColor Yellow
+Write-Host "Platform: Windows x64" -ForegroundColor Yellow
 Write-Host ""
 
 # Check Python version
@@ -98,22 +111,82 @@ Write-Host "============================================" -ForegroundColor Green
 Write-Host " Build completed successfully!" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Green
 Write-Host ""
+Write-Host "Version: $VERSION" -ForegroundColor Cyan
+Write-Host "Platform: Windows x64" -ForegroundColor Cyan
 Write-Host "Executable: dist\ChordToMIDI.exe"
-Write-Host "Size: ~50 MB (includes all features)"
 Write-Host ""
-Write-Host "Version 1.0 Features:" -ForegroundColor Cyan
-Write-Host "  ✓ Extended octave range (2-7, default 4)"
-Write-Host "  ✓ Fixed bass note handling"
-Write-Host "  ✓ BPM Control (1-300)"
-Write-Host "  ✓ MIDI Preview (no mic access needed)"
-Write-Host "  ✓ Drag-to-save functionality"
-Write-Host "  ✓ Cmaj7 chord support"
+
+# Create ZIP package
 Write-Host ""
-Write-Host "To run: Double-click dist\ChordToMIDI.exe"
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host " Creating ZIP package..." -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "IMPORTANT: No microphone permissions required!" -ForegroundColor Green
-Write-Host "This app uses audio output only."
-Write-Host "============================================"
-Write-Host ""
+
+$ZIP_NAME = "ChordToMIDI-$VERSION-win-x64.zip"
+$ZIP_PATH = "dist\$ZIP_NAME"
+
+# Remove existing ZIP if it exists
+if (Test-Path $ZIP_PATH) {
+    Write-Host "Removing existing ZIP..." -ForegroundColor Yellow
+    Remove-Item -Force $ZIP_PATH
+}
+
+# Create ZIP archive
+Write-Host "Compressing files..." -ForegroundColor Yellow
+try {
+    # Create a temporary folder for packaging
+    $TEMP_FOLDER = "dist\ChordToMIDI-$VERSION"
+    if (Test-Path $TEMP_FOLDER) {
+        Remove-Item -Recurse -Force $TEMP_FOLDER
+    }
+    New-Item -ItemType Directory -Path $TEMP_FOLDER | Out-Null
+    
+    # Copy executable and README
+    Copy-Item "dist\ChordToMIDI.exe" $TEMP_FOLDER
+    if (Test-Path "README.md") {
+        Copy-Item "README.md" $TEMP_FOLDER
+    }
+    
+    # Create ZIP
+    Compress-Archive -Path $TEMP_FOLDER -DestinationPath $ZIP_PATH -Force
+    
+    # Clean up temp folder
+    Remove-Item -Recurse -Force $TEMP_FOLDER
+    
+    $FILE_SIZE = (Get-Item $ZIP_PATH).Length / 1MB
+    $FILE_SIZE = [math]::Round($FILE_SIZE, 2)
+    
+    Write-Host ""
+    Write-Host "============================================" -ForegroundColor Green
+    Write-Host " Package completed successfully!" -ForegroundColor Green
+    Write-Host "============================================" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Version: $VERSION" -ForegroundColor Cyan
+    Write-Host "Platform: Windows x64" -ForegroundColor Cyan
+    Write-Host "ZIP Package: $ZIP_PATH" -ForegroundColor Green
+    Write-Host "Size: $FILE_SIZE MB"
+    Write-Host ""
+    Write-Host "Features:" -ForegroundColor Cyan
+    Write-Host "  ✓ Extended octave range (2-7, default 4)"
+    Write-Host "  ✓ Fixed bass note handling"
+    Write-Host "  ✓ BPM Control (1-300)"
+    Write-Host "  ✓ MIDI Preview (no mic access needed)"
+    Write-Host "  ✓ Drag-to-save functionality"
+    Write-Host "  ✓ Cmaj7 chord support"
+    Write-Host ""
+    Write-Host "To distribute:" -ForegroundColor Yellow
+    Write-Host "  - Share the ZIP file: $ZIP_PATH"
+    Write-Host "  - Users can extract and run ChordToMIDI.exe"
+    Write-Host ""
+    Write-Host "IMPORTANT: No microphone permissions required!" -ForegroundColor Green
+    Write-Host "This app uses audio output only."
+    Write-Host "============================================"
+    Write-Host ""
+    
+} catch {
+    Write-Host "ERROR: Failed to create ZIP package" -ForegroundColor Red
+    Write-Host $_.Exception.Message -ForegroundColor Red
+}
 
 Read-Host "Press Enter to exit"

@@ -1,4 +1,5 @@
 .venv/
+.venv_intel/
 build/
 dist/
 release/
