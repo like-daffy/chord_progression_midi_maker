@@ -220,6 +220,12 @@ class ChordToMIDIQt(QMainWindow):
             'E#': 'F', 'Fb': 'E', 'B#': 'C', 'Cb': 'B'
         }
         
+
+        # Enharmonic equivalents for uncommon notations
+        self.enharmonic_equivalents = {
+            'E#': 'F', 'Fb': 'E', 'B#': 'C', 'Cb': 'B'
+        }
+        
         self.chord_data = {}
         self.current_midi_file = None
         self.bpm = 120  # Default BPM
@@ -269,7 +275,22 @@ C7+5,048a,
 CM7-5,046b,
 Cm7+5,038a,
 C11,047ah,
-C4.4,05af,"""
+C4.4,05af,
+C7b13,0478a,
+C7add9,0247a,
+C7sus2,027a,
+C7susb5,046a,
+Cm7b5,036a,
+Cm7b9,0137a,
+Cm7-11,0357a,
+Cm7add9,0237a,
+Cm7add11,0357a,
+Cdim,036,
+Cm11,02357a,
+Cm11b13,023578a,
+Cm11b9,01357a,
+Cm11b9b13,013578a,
+Cm13,023579a,"""
         
         # Parse CSV data
         lines = csv_content.strip().split('\n')
@@ -504,6 +525,21 @@ C4.4,05af,"""
         midi_group.setLayout(midi_layout)
         main_layout.addWidget(midi_group)
         
+        # Footer section
+        footer_layout = QHBoxLayout()
+        footer_layout.addStretch()
+        
+        copyright_label = QLabel('Copyright © 2025 Sochan, X (Twitter): <a href="#" style="color: #1DA1F2; text-decoration: none;">@sochan_life</a> For personal use')
+        copyright_label.setStyleSheet("color: #666; font-size: 14px;")
+        copyright_label.setOpenExternalLinks(False)
+        copyright_label.linkActivated.connect(lambda: self.open_twitter())
+        copyright_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        footer_layout.addWidget(copyright_label)
+        footer_layout.addStretch()
+        
+        main_layout.addLayout(footer_layout)
+        
         # Set up keyboard shortcuts
         self.chord_input.returnPressed.connect(self.process_chords)
     
@@ -551,6 +587,16 @@ C4.4,05af,"""
         pattern = r'([A-G][#b]?)min'
         return re.sub(pattern, r'\1m', chord_str)
     
+    def remove_parentheses(self, chord_str: str) -> str:
+        """Remove parentheses from chord notation.
+        
+        Examples:
+            Cm11(b13) -> Cm11b13
+            C7(#9) -> C7#9
+            Dm7(add11) -> Dm7add11
+        """
+        return chord_str.replace('(', '').replace(')', '')
+
     def convert_enharmonic(self, chord_str: str) -> str:
         """Convert uncommon enharmonic equivalents to standard notation.
         
@@ -579,6 +625,7 @@ C4.4,05af,"""
                 chord_str = main_chord + '/' + bass_note
         
         return chord_str
+
 
     def convert_flat_to_sharp(self, note: str) -> str:
         """Convert flat notation to sharp notation."""
@@ -660,15 +707,12 @@ C4.4,05af,"""
     
     def get_chord_notes(self, chord_str: str, octave: int) -> Optional[List[int]]:
         """Get MIDI notes for a chord string."""
-        # Convert uncommon enharmonic equivalents
-        chord_str = self.convert_enharmonic(chord_str)
-        
         # Convert 'min' notation to 'm' notation
         chord_str = self.convert_min_to_m(chord_str)
         
         # Parse chord and bass note
         main_chord, bass_note_str = self.parse_chord_with_bass(chord_str)
-
+        
         # Normalize chord name
         chord_parts = self.normalize_chord_name(main_chord)
         if not chord_parts:
@@ -695,7 +739,7 @@ C4.4,05af,"""
             base_chord = 'C'
             if base_chord in self.chord_data:
                 QMessageBox.warning(self, "Chord Not Found", 
-                                   f"Chord '{main_chord}' not found. Using basic chord instead.")
+                                f"Chord '{main_chord}' not found. Using basic chord instead.")
                 chord_info = self.chord_data[base_chord]
             else:
                 return None
@@ -986,6 +1030,11 @@ C4.4,05af,"""
         if message:
             # Clear message after 3 seconds
             QTimer.singleShot(3000, lambda: self.status_label.setText(""))
+    
+    def open_twitter(self):
+        """Open Twitter profile in default browser."""
+        import webbrowser
+        webbrowser.open("https://x.com/sochan_life")
 
 
 def main():
