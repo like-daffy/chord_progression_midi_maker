@@ -1,4 +1,4 @@
-# Chord to MIDI Converter v1.0 (PyQt6)
+# Chord to MIDI Converter (PyQt6)
 
 A professional desktop application for converting chord progressions into MIDI files with BPM control, real-time preview, and drag-to-save functionality. No microphone permissions required.
 
