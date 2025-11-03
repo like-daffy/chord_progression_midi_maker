@@ -11,8 +11,6 @@ A professional desktop application for converting chord progressions into MIDI f
 - **Slash Chord Support**: Bass notes automatically placed one octave lower
 - **Extended Octave Range**: Choose from octaves 2-7 (default: 4)
 - **Cross-Platform**: Windows, macOS, and Linux compatible
-
-### Version 1.0 Features
 - **BPM Control**: Visual slider and manual input (1-300 BPM)
 - **MIDI Preview**: Listen before saving (no microphone access needed)
 - **Drag-to-Save**: Drag MIDI display directly to Desktop or folders
@@ -195,17 +193,6 @@ pyinstaller --onefile --windowed \
 - This version doesn't need microphone
 - If still prompted, check other running apps
 
-## 📝 Version History
-
-### Version 1.0 (Current)
-- Initial release with all features
-- Fixed bass note transposition
-- Removed microphone requirements
-- Extended octave range (2-7)
-- Default octave changed to 4
-- BPM control (1-300)
-- MIDI preview (playback only)
-- Drag-to-save functionality
 
 ## 🎵 Examples
 
