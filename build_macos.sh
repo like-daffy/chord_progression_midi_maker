@@ -224,7 +224,8 @@ EOF
     SOURCE_APP="dist/ChordToMIDI.app"
     VOLUME_NAME="ChordToMIDI ${VERSION}"
     VOLUME_ICON="chord_to_midi.icns"
-    OUTPUT_DMG="dist/ChordToMIDI-${VERSION}-macos-${PLATFORM_SUFFIX}.dmg"
+    DMG_FILENAME="ChordToMIDI-${VERSION}-macos-${PLATFORM_SUFFIX}.dmg"
+    OUTPUT_DMG="dist/${DMG_FILENAME}"
     TEMP_DMG="temp.dmg"
     
     # Check if icon file exists
@@ -235,7 +236,7 @@ EOF
     
     # Remove existing DMG if it exists
     if [ -f "${OUTPUT_DMG}" ]; then
-        echo "Removing existing DMG..."
+        echo "Removing existing DMG from dist..."
         rm "${OUTPUT_DMG}"
     fi
     
@@ -296,6 +297,30 @@ EOF
     # Clean up
     rm "${TEMP_DMG}"
     
+    # Create release directory if it doesn't exist
+    echo
+    echo "Moving DMG to release folder..."
+    if [ ! -d "release" ]; then
+        mkdir -p release
+        echo "Created release/ directory"
+    fi
+    
+    # Move DMG to release folder
+    FINAL_DMG_PATH="release/${DMG_FILENAME}"
+    
+    # Remove existing DMG in release folder if it exists
+    if [ -f "${FINAL_DMG_PATH}" ]; then
+        echo "Removing existing DMG from release folder..."
+        rm "${FINAL_DMG_PATH}"
+    fi
+    
+    mv "${OUTPUT_DMG}" "${FINAL_DMG_PATH}"
+    
+    if [ $? -ne 0 ]; then
+        echo "ERROR: Failed to move DMG to release folder"
+        exit 1
+    fi
+    
     echo
     echo "============================================"
     echo " Package completed successfully!"
@@ -303,12 +328,19 @@ EOF
     echo
     echo "Platform: $PLATFORM_NAME ($PLATFORM_SUFFIX)"
     echo "Version: $VERSION"
-    echo "DMG Package: ${OUTPUT_DMG}"
-    echo "Size: $(du -h "${OUTPUT_DMG}" | cut -f1)"
+    echo "DMG Package: ${FINAL_DMG_PATH}"
+    echo "Size: $(du -h "${FINAL_DMG_PATH}" | cut -f1)"
     echo
+    echo "Version Features:"
+    echo "  ✓ Extended octave range (2-7, default 4)"
+    echo "  ✓ Fixed bass note handling"
+    echo "  ✓ BPM Control (1-300)"
+    echo "  ✓ MIDI Preview (no mic access needed)"
+    echo "  ✓ Drag-to-save functionality"
+    echo "  ✓ Cmaj7 chord support"
     echo
     echo "To distribute:"
-    echo "  - Share the DMG file: ${OUTPUT_DMG}"
+    echo "  - Share the DMG file: ${FINAL_DMG_PATH}"
     echo "  - Users can drag the app to Applications folder"
     echo
     echo "IMPORTANT: No microphone permissions required!"
