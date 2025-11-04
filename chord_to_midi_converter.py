@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Chord Progression to MIDI Converter (PyQt6 Version 1.0)
-Enhanced with BPM control, MIDI preview, and true drag-and-drop functionality
+Enhanced with BPM control, MIDI preview, drag-and-drop, and MIDI-to-chord conversion
 No microphone/record permissions required - playback only
 """
 
@@ -12,9 +12,10 @@ import csv
 import tempfile
 import shutil
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Set
 import threading
 import time
+from collections import defaultdict
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -50,9 +51,20 @@ except ImportError:
     print("Warning: pygame not installed. MIDI preview will not be available.")
     print("Install with: pip install pygame")
 
+# Try to import mido for MIDI parsing
+try:
+    import mido
+    MIDO_AVAILABLE = True
+except ImportError:
+    MIDO_AVAILABLE = False
+    print("Warning: mido not installed. MIDI import will be limited.")
+    print("Install with: pip install mido")
+
 # We'll skip sounddevice to avoid microphone permission issues
-# Instead, we'll use pygame's default output
 SOUNDDEVICE_AVAILABLE = False
+
+# Maximum chords to extract from MIDI
+MAX_CHORDS_FROM_MIDI = 32
 
 
 class MidiPlayerThread(QThread):
@@ -96,14 +108,16 @@ class MidiPlayerThread(QThread):
 
 
 class DraggableMidiDisplay(QTextEdit):
-    """Custom QTextEdit widget with drag-to-save functionality."""
+    """Custom QTextEdit widget with drag-to-save and drag-to-import functionality."""
+    
+    midi_file_dropped = pyqtSignal(str)
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.current_midi_file = None
         self.midi_filename = "chord_progression.mid"
         self.setReadOnly(True)
-        self.setAcceptDrops(False)  # We only drag out, not in
+        self.setAcceptDrops(True)  # Now accepting drops for MIDI import
         self.setStyleSheet("""
             QTextEdit {
                 background-color: #e8f4f8;
@@ -123,6 +137,28 @@ class DraggableMidiDisplay(QTextEdit):
         """Set the current MIDI file path."""
         self.current_midi_file = file_path
         self.midi_filename = filename
+    
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        """Handle drag enter event for MIDI import."""
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls and urls[0].toLocalFile().lower().endswith(('.mid', '.midi')):
+                event.acceptProposedAction()
+            else:
+                event.ignore()
+        else:
+            event.ignore()
+    
+    def dropEvent(self, event: QDropEvent):
+        """Handle drop event for MIDI import."""
+        if event.mimeData().hasUrls():
+            for url in event.mimeData().urls():
+                file_path = url.toLocalFile()
+                if file_path.lower().endswith(('.mid', '.midi')):
+                    self.midi_file_dropped.emit(file_path)
+                    event.acceptProposedAction()
+                    return
+        event.ignore()
     
     def mousePressEvent(self, event: QMouseEvent):
         """Handle mouse press for drag initiation."""
@@ -220,11 +256,8 @@ class ChordToMIDIQt(QMainWindow):
             'E#': 'F', 'Fb': 'E', 'B#': 'C', 'Cb': 'B'
         }
         
-
-        # Enharmonic equivalents for uncommon notations
-        self.enharmonic_equivalents = {
-            'E#': 'F', 'Fb': 'E', 'B#': 'C', 'Cb': 'B'
-        }
+        # For chord recognition
+        self.code_to_chord_map = {}  # Will be populated from CSV
         
         self.chord_data = {}
         self.current_midi_file = None
@@ -304,10 +337,282 @@ Cm13,023579a,"""
                 'code': chord_code,
                 'bass': bass_note
             }
+            
+            # Create normalized code for chord recognition
+            normalized_code = self.normalize_chord_code(chord_code)
+            self.code_to_chord_map[normalized_code] = chord_name
+    
+    def normalize_chord_code(self, code: str) -> str:
+        """Normalize chord code by converting octave-shifted notes to base octave and sorting."""
+        normalized = []
+        
+        for char in code:
+            if char in self.code_to_note:
+                note_name, octave = self.code_to_note[char]
+                if octave == 0:
+                    normalized.append(char)
+                else:
+                    # Find equivalent note at octave 0
+                    for base_char, (base_note, base_octave) in self.code_to_note.items():
+                        if base_note == note_name and base_octave == 0:
+                            normalized.append(base_char)
+                            break
+        
+        # Sort: numbers first, then alphabets
+        numbers = sorted([c for c in normalized if c.isdigit()])
+        letters = sorted([c for c in normalized if c.isalpha()])
+        
+        return ''.join(numbers + letters)
+    
+    def alphabet_to_number(self, char: str) -> int:
+        """Convert alphabet code to number for chord recognition."""
+        if char.isdigit():
+            return int(char)
+        elif char == 'a':
+            return 10
+        elif char == 'b':
+            return 11
+        else:
+            # Handle higher octave notes
+            for code, (note, octave) in self.code_to_note.items():
+                if code == char:
+                    return self.note_to_midi[note] + 12 * octave
+        return -1
+    
+    def parse_midi_file(self, filepath: str) -> List[Dict]:
+        """Parse MIDI file and extract chord information."""
+        if not MIDO_AVAILABLE:
+            QMessageBox.warning(self, "MIDI Import", 
+                              "Advanced MIDI parsing requires 'mido' library.\n"
+                              "Install with: pip install mido")
+            return []
+        
+        try:
+            mid = mido.MidiFile(filepath)
+            
+            # Collect all note events with timing
+            note_events = []
+            current_time = 0
+            
+            for track in mid.tracks:
+                current_time = 0
+                for msg in track:
+                    current_time += msg.time
+                    
+                    if msg.type == 'note_on' and msg.velocity > 0:
+                        # Convert ticks to beats
+                        beat_time = current_time / mid.ticks_per_beat
+                        note_events.append({
+                            'time': beat_time,
+                            'note': msg.note,
+                            'velocity': msg.velocity
+                        })
+            
+            # Sort by time
+            note_events.sort(key=lambda x: x['time'])
+            
+            # Group notes that start at similar times into chords
+            chord_events = []
+            current_chord = []
+            current_time = -1
+            time_threshold = 0.05  # Notes within this time are considered simultaneous
+            
+            for event in note_events:
+                if current_time < 0 or abs(event['time'] - current_time) < time_threshold:
+                    current_chord.append(event)
+                    if current_time < 0:
+                        current_time = event['time']
+                else:
+                    # Process current chord
+                    if len(current_chord) >= 3:  # Need at least 3 notes
+                        # Sort by pitch (highest first)
+                        current_chord.sort(key=lambda x: x['note'], reverse=True)
+                        
+                        # Take top 4 notes maximum
+                        chord_notes = current_chord[:4]
+                        
+                        # Extract note names (ignoring octave)
+                        note_names = []
+                        for note_info in chord_notes:
+                            midi_num = note_info['note']
+                            note_num = midi_num % 12
+                            
+                            # Convert to note name
+                            for name, num in self.note_to_midi.items():
+                                if num == note_num:
+                                    note_names.append(name)
+                                    break
+                        
+                        chord_events.append({
+                            'notes': note_names,
+                            'time': current_time,
+                            'duration': 1.0  # Will be calculated later
+                        })
+                    
+                    # Start new chord
+                    current_chord = [event]
+                    current_time = event['time']
+            
+            # Process last chord
+            if len(current_chord) >= 3:
+                current_chord.sort(key=lambda x: x['note'], reverse=True)
+                chord_notes = current_chord[:4]
+                note_names = []
+                for note_info in chord_notes:
+                    midi_num = note_info['note']
+                    note_num = midi_num % 12
+                    for name, num in self.note_to_midi.items():
+                        if num == note_num:
+                            note_names.append(name)
+                            break
+                chord_events.append({
+                    'notes': note_names,
+                    'time': current_time,
+                    'duration': 1.0
+                })
+            
+            # Calculate durations based on time differences
+            for i in range(len(chord_events) - 1):
+                chord_events[i]['duration'] = chord_events[i+1]['time'] - chord_events[i]['time']
+            
+            # Limit to MAX_CHORDS_FROM_MIDI
+            return chord_events[:MAX_CHORDS_FROM_MIDI]
+            
+        except Exception as e:
+            QMessageBox.critical(self, "MIDI Import Error", 
+                               f"Failed to parse MIDI file: {str(e)}")
+            return []
+    
+    def recognize_chord_from_notes(self, notes: List[str]) -> Optional[str]:
+        """Recognize chord from list of note names."""
+        if len(notes) < 3:
+            return None
+        
+        # Remove duplicates while preserving order
+        unique_notes = []
+        seen = set()
+        for note in notes:
+            if note not in seen:
+                unique_notes.append(note)
+                seen.add(note)
+        
+        if len(unique_notes) < 3:
+            return None
+        
+        # Convert notes to codes
+        note_codes = []
+        for note in unique_notes:
+            if note in self.note_to_code:
+                code = self.note_to_code[note]
+                note_codes.append(self.alphabet_to_number(code))
+        
+        # Try each note as potential root
+        tested_codes = set()  # Track tested codes to avoid duplicates
+        
+        for root_idx, root_code in enumerate(note_codes):
+            # Transpose all notes relative to this root
+            transposed = []
+            for code in note_codes:
+                diff = code - root_code
+                if diff < 0:
+                    diff += 12
+                transposed.append(diff)
+            
+            # Sort and convert back to code string
+            transposed.sort()
+            code_string = ''
+            for num in transposed:
+                if num < 10:
+                    code_string += str(num)
+                elif num == 10:
+                    code_string += 'a'
+                elif num == 11:
+                    code_string += 'b'
+            
+            # Skip if we've already tested this code
+            if code_string in tested_codes:
+                continue
+            tested_codes.add(code_string)
+            
+            # Check if this code matches any known chord
+            if code_string in self.code_to_chord_map:
+                # Get the chord name and transpose it
+                base_chord = self.code_to_chord_map[code_string]
+                root_note = unique_notes[root_idx]
+                
+                # Replace C with actual root
+                if base_chord.startswith('C'):
+                    if len(base_chord) > 1 and base_chord[1] not in ['/', '#', 'b', 'm']:
+                        # Handle chord types that start with C
+                        return root_note + base_chord[1:]
+                    elif len(base_chord) > 1 and base_chord[1] == 'm':
+                        # Handle minor chords
+                        return root_note + base_chord[1:]
+                    else:
+                        # Basic major chord
+                        return root_note if len(base_chord) == 1 else root_note + base_chord[1:]
+                
+        return None
+    
+    def import_midi_to_progression(self, filepath: str):
+        """Import MIDI file and convert to chord progression."""
+        chord_events = self.parse_midi_file(filepath)
+        
+        if not chord_events:
+            QMessageBox.warning(self, "MIDI Import", 
+                              "No valid chords found in MIDI file.\n"
+                              "Make sure the MIDI file contains at least 3 simultaneous notes to form chords.")
+            return
+        
+        # Convert chord events to progression string
+        progression_parts = []
+        skipped_chords = []
+        
+        for idx, event in enumerate(chord_events):
+            chord_name = self.recognize_chord_from_notes(event['notes'])
+            
+            if chord_name:
+                # Handle timing with brackets
+                duration = event.get('duration', 1.0)
+                if duration < 0.9:  # Less than a full beat
+                    # Check if we should group with previous chord
+                    if progression_parts and not progression_parts[-1].endswith(']'):
+                        # Start a new bracket group
+                        progression_parts.append(f"[{chord_name}")
+                    elif progression_parts and progression_parts[-1].endswith(']'):
+                        # Previous was already bracketed, add this as new
+                        progression_parts.append(chord_name)
+                    else:
+                        progression_parts.append(f"[{chord_name}]")
+                else:
+                    # Full beat chord
+                    if progression_parts and progression_parts[-1].startswith('[') and not progression_parts[-1].endswith(']'):
+                        # Close previous bracket
+                        progression_parts[-1] += ']'
+                    progression_parts.append(chord_name)
+            else:
+                skipped_chords.append(idx + 1)
+        
+        # Close any unclosed brackets
+        if progression_parts and progression_parts[-1].startswith('[') and not progression_parts[-1].endswith(']'):
+            progression_parts[-1] += ']'
+        
+        if skipped_chords:
+            skipped_str = ', '.join(map(str, skipped_chords))
+            QMessageBox.information(self, "Import Notice", 
+                                   f"The following chord positions did not have enough notes and were skipped: {skipped_str}")
+        
+        if progression_parts:
+            progression_str = ' - '.join(progression_parts)
+            self.chord_input.setText(progression_str)
+            self.show_status_message(f"Imported {len(progression_parts)} chords from MIDI")
+        else:
+            QMessageBox.warning(self, "MIDI Import", 
+                              "Could not recognize any valid chords from the MIDI file.")
     
     def init_ui(self):
         """Initialize the user interface."""
-        self.setWindowTitle("Chord Progression to MIDI Converter v1.0")
+        self.setWindowTitle("Chord Progression to MIDI Converter")
         self.setGeometry(100, 100, 900, 750)
         
         # Set application style
@@ -506,13 +811,14 @@ Cm13,023579a,"""
         preview_group.setLayout(preview_layout)
         main_layout.addWidget(preview_group)
         
-        # MIDI file section (drag-to-save)
-        midi_group = QGroupBox("MIDI File (Drag to Save)")
+        # MIDI file section (drag section - bidirectional)
+        midi_group = QGroupBox("MIDI File (Drag Section)")
         midi_layout = QVBoxLayout()
         
-        # MIDI display area with drag-to-save
+        # MIDI display area with drag-to-save and drag-to-import
         self.midi_display = DraggableMidiDisplay()
         self.midi_display.setMinimumHeight(150)
+        self.midi_display.midi_file_dropped.connect(self.import_midi_to_progression)
         self.update_midi_display("")
         
         midi_layout.addWidget(self.midi_display)
@@ -574,41 +880,18 @@ Cm13,023579a,"""
                 self.bpm_slider.blockSignals(False)
     
     def convert_min_to_m(self, chord_str: str) -> str:
-        """Convert 'min' notation to 'm' notation in chord names.
-        
-        Examples:
-            Cmin -> Cm
-            Cmin7 -> Cm7
-            C#min -> C#m
-            Amin/E -> Am/E
-        """
-        # Pattern matches: note name (with optional #/b) + 'min'
-        # Replace 'min' with 'm' when it follows a note name
+        """Convert 'min' notation to 'm' notation in chord names."""
         pattern = r'([A-G][#b]?)min'
         return re.sub(pattern, r'\1m', chord_str)
     
     def remove_parentheses(self, chord_str: str) -> str:
-        """Remove parentheses from chord notation.
-        
-        Examples:
-            Cm11(b13) -> Cm11b13
-            C7(#9) -> C7#9
-            Dm7(add11) -> Dm7add11
-        """
+        """Remove parentheses from chord notation."""
         return chord_str.replace('(', '').replace(')', '')
 
     def convert_enharmonic(self, chord_str: str) -> str:
-        """Convert uncommon enharmonic equivalents to standard notation.
-        
-        Examples:
-            E# -> F
-            Fb -> E
-            B# -> C
-            Cb -> B
-        """
+        """Convert uncommon enharmonic equivalents to standard notation."""
         for enharmonic, standard in self.enharmonic_equivalents.items():
             if chord_str.startswith(enharmonic):
-                # Replace only at the start (the root note)
                 suffix = chord_str[len(enharmonic):]
                 chord_str = standard + suffix
                 break
@@ -625,7 +908,6 @@ Cm13,023579a,"""
                 chord_str = main_chord + '/' + bass_note
         
         return chord_str
-
 
     def convert_flat_to_sharp(self, note: str) -> str:
         """Convert flat notation to sharp notation."""
@@ -654,7 +936,10 @@ Cm13,023579a,"""
         """Normalize chord name for flexible matching."""
         if not chord:
             return None
-            
+        
+        # Convert enharmonic equivalents first
+        chord = self.convert_enharmonic(chord)
+        
         # Handle flat notation
         chord = self.convert_flat_to_sharp(chord)
         
@@ -707,6 +992,9 @@ Cm13,023579a,"""
     
     def get_chord_notes(self, chord_str: str, octave: int) -> Optional[List[int]]:
         """Get MIDI notes for a chord string."""
+        # Convert enharmonic equivalents
+        chord_str = self.convert_enharmonic(chord_str)
+        
         # Convert 'min' notation to 'm' notation
         chord_str = self.convert_min_to_m(chord_str)
         
@@ -814,11 +1102,7 @@ Cm13,023579a,"""
         return progression_items
     
     def validate_brackets(self, progression_str: str) -> Tuple[bool, Optional[str]]:
-        """Validate that square brackets are properly paired in the chord progression.
-        
-        Returns:
-            Tuple of (is_valid, error_message)
-        """
+        """Validate that square brackets are properly paired in the chord progression."""
         bracket_count = 0
         last_chord_before_any_bracket = None
         last_chord_seen = None
@@ -935,6 +1219,7 @@ Cm13,023579a,"""
                 info_text += f"Number of chords: {len(progression_items)}\n\n"
                 info_text += "🎵 Click 'Preview' to listen to the MIDI\n"
                 info_text += "📁 Drag this area to Desktop or any folder to save the MIDI file\n"
+                info_text += "📥 Or drag a MIDI file here to convert it to chord progression\n"
                 info_text += f"   File will be saved as: {filename}"
                 
                 self.update_midi_display(info_text)
@@ -968,7 +1253,8 @@ Cm13,023579a,"""
                 "1. Enter a chord progression\n"
                 "2. Set your desired BPM (1-300)\n"
                 "3. Click 'Proceed' to generate\n"
-                "4. Preview the MIDI or drag to save"
+                "4. Preview the MIDI or drag to save\n\n"
+                "📥 You can also drag a MIDI file here to convert it to chord progression"
             )
     
     def preview_midi(self):
