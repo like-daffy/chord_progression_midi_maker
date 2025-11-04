@@ -149,6 +149,17 @@ class DraggableMidiDisplay(QTextEdit):
         else:
             event.ignore()
     
+    def dragMoveEvent(self, event: QDragEnterEvent):
+        """Handle drag move event to maintain the drag operation."""
+        if event.mimeData().hasUrls():  
+            urls = event.mimeData().urls()
+            if urls and urls[0].toLocalFile().lower().endswith(('.mid', '.midi')):
+                event.acceptProposedAction()
+            else:
+                event.ignore()
+        else:
+            event.ignore()
+
     def dropEvent(self, event: QDropEvent):
         """Handle drop event for MIDI import."""
         if event.mimeData().hasUrls():
@@ -340,7 +351,16 @@ Cm13,023579a,"""
             
             # Create normalized code for chord recognition
             normalized_code = self.normalize_chord_code(chord_code)
-            self.code_to_chord_map[normalized_code] = chord_name
+            
+            # Only add to recognition map if:
+            # 1. This code isn't already in the map, OR
+            # 2. This chord has no bass note (prefer non-slash chords)
+            if '/' not in chord_name:
+                # Non-slash chords always take priority
+                self.code_to_chord_map[normalized_code] = chord_name
+            elif normalized_code not in self.code_to_chord_map:
+                # Only add slash chords if no entry exists yet
+                self.code_to_chord_map[normalized_code] = chord_name
     
     def normalize_chord_code(self, code: str) -> str:
         """Normalize chord code by converting octave-shifted notes to base octave and sorting."""
