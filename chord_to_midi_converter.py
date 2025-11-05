@@ -658,7 +658,7 @@ Cm13,023579a,"""
 
     def init_ui(self):
         """Initialize the user interface."""
-        self.setWindowTitle("Chord Progression to MIDI Converter")
+        self.setWindowTitle("Chord Progression to MIDI Converter v1.2")
         self.setGeometry(100, 100, 900, 750)
         
         # Set application style

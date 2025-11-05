@@ -1,6 +1,6 @@
 # Chord to MIDI Converter (PyQt6)
 
-A professional desktop application for converting chord progressions into MIDI files with BPM control, real-time preview, and drag-to-save functionality. No microphone permissions required.
+A professional desktop application for converting chord progressions into MIDI files with BPM control, real-time preview, and drag-to-save functionality. Now with **bi-directional MIDI support** - convert chords to MIDI or analyze MIDI files to extract chord progressions.
 
 ## 🎵 Key Features
 
@@ -15,6 +15,8 @@ A professional desktop application for converting chord progressions into MIDI f
 - **MIDI Preview**: Listen before saving (no microphone access needed)
 - **Drag-to-Save**: Drag MIDI display directly to Desktop or folders
 - **Smart Naming**: Automatic file naming with progression and BPM
+- **🆕 MIDI Drag-In**: Drag external MIDI files into the app to extract chord progressions
+- **Reverse Conversion**: Analyze MIDI files and convert them back to chord notation
 - **Updated Database**: Including Cmaj7 chord support
 
 ## 📦 Installation
@@ -45,7 +47,9 @@ pip install PyQt6 midiutil
 
 ## 🚀 Usage Guide
 
-### Basic Workflow
+### Two-Way Conversion
+
+#### 🎹 Chords → MIDI (Original Feature)
 
 1. **Set Parameters**
    - Select octave (2-7, default: 4)
@@ -65,6 +69,26 @@ pip install PyQt6 midiutil
 5. **Save Your File**
    - Drag the blue area to any folder
    - File saves automatically with descriptive name
+
+#### 🎼 MIDI → Chords (New Feature)
+
+1. **Drag MIDI File**
+   - Drag any .mid or .midi file from your file explorer
+   - Drop it anywhere in the application window
+
+2. **Automatic Analysis**
+   - App analyzes note patterns
+   - Detects chord types and progressions
+   - Extracts timing and BPM information
+
+3. **View Results**
+   - Chord progression appears in the input field
+   - BPM automatically updates to match source file
+   - Edit and modify as needed
+
+4. **Re-Export (Optional)**
+   - Adjust parameters if desired
+   - Generate new MIDI with modified settings
 
 ### Chord Notation
 
@@ -120,12 +144,20 @@ Am - [F - G - C]           # F, G, C each get 1/3 beat
 
 ## 🧪 Testing
 
-Test the bass note fix:
+### Test Chord to MIDI
 ```python
 # A/E chord should produce:
 # - A major chord: A, C#, E
 # - E bass note (one octave lower)
 # With octave 4: E3, A4, C#5, E5
+```
+
+### Test MIDI Drag-In
+```
+1. Export a simple progression (e.g., C - G - Am - F)
+2. Drag the exported .mid file back into the app
+3. Verify the chord progression matches
+4. Check BPM is correctly detected
 ```
 
 ## 🛠️ Building Executables
@@ -160,7 +192,9 @@ pyinstaller --onefile --windowed \
 ### Architecture
 - **Main Class**: `ChordToMIDIQt` - Application window and logic
 - **Drag Widget**: `DraggableMidiDisplay` - Drag-to-save functionality
+- **Drop Handler**: MIDI file drag-in and chord analysis
 - **Player Thread**: `MidiPlayerThread` - Non-blocking audio playback
+- **Chord Analyzer**: Pattern recognition for MIDI-to-chord conversion
 - **No Audio Input**: pygame mixer only, no microphone access
 
 ### Chord Processing
@@ -170,6 +204,15 @@ pyinstaller --onefile --windowed \
 4. Transpose to target key
 5. Handle bass notes separately
 6. Generate MIDI with BPM
+
+### MIDI Analysis
+1. Parse MIDI file structure
+2. Extract note events and timing
+3. Group simultaneous notes into chords
+4. Match patterns against chord database
+5. Detect slash chords and inversions
+6. Calculate BPM from tempo events
+7. Generate chord progression notation
 
 ## 🐛 Troubleshooting
 
@@ -186,13 +229,22 @@ pyinstaller --onefile --windowed \
 - On macOS: Check Security & Privacy settings
 
 **"Wrong bass notes"**
-- Update to this version (v1.0)
+- Update to this version (v1.2)
 - Bass notes now correctly placed at octave-1
 
 **"Microphone permission requested"**
 - This version doesn't need microphone
 - If still prompted, check other running apps
 
+**"MIDI file not recognized when dragged"**
+- Ensure file extension is .mid or .midi
+- Check file is valid MIDI format
+- Try with a simple MIDI file first
+
+**"Chord detection inaccurate"**
+- Complex polyphonic MIDI may not convert perfectly
+- Works best with clear chord-based arrangements
+- Manual editing may be needed for complex files
 
 ## 🎵 Examples
 
@@ -214,6 +266,14 @@ Am7/E - E/G# - [Am - Fmaj7] - F/C
 BPM: 90, Octave: 4
 ```
 
+### Workflow Example
+```
+1. Drag in: song.mid
+2. Extracted: Dm7 - G7 - CM7 - A7
+3. Modify: Dm7 - G7 - CM7 - Am7
+4. Export: Modified version with new BPM
+```
+
 ## 📄 Files
 
 - `chord_to_midi_converter_qt_v1.py` - Main application
@@ -227,9 +287,10 @@ For issues or questions:
 2. Verify Python version (3.8+)
 3. Ensure dependencies are installed
 4. Test with simple progressions first
+5. For MIDI analysis issues, try simpler MIDI files
 
 ---
 
-**Version**: 1.0  
+**Version**: 1.2  
 **License**: For educational and personal use  
 **Dependencies**: PyQt6 (GPL/Commercial), pygame (LGPL), midiutil (MIT)
