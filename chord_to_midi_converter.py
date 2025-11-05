@@ -403,8 +403,8 @@ Cm13,023579a,"""
         """Parse MIDI file and extract chord information."""
         if not MIDO_AVAILABLE:
             QMessageBox.warning(self, "MIDI Import", 
-                              "Advanced MIDI parsing requires 'mido' library.\n"
-                              "Install with: pip install mido")
+                            "Advanced MIDI parsing requires 'mido' library.\n"
+                            "Install with: pip install mido")
             return []
         
         try:
@@ -466,7 +466,7 @@ Cm13,023579a,"""
                         chord_events.append({
                             'notes': note_names,
                             'time': current_time,
-                            'duration': 1.0  # Will be calculated later
+                            'duration': event['time'] - current_time  # Duration until next chord
                         })
                     
                     # Start new chord
@@ -485,22 +485,26 @@ Cm13,023579a,"""
                         if num == note_num:
                             note_names.append(name)
                             break
+                
+                # Last chord duration defaults to 1 beat
                 chord_events.append({
                     'notes': note_names,
                     'time': current_time,
                     'duration': 1.0
                 })
             
-            # Calculate durations based on time differences
-            for i in range(len(chord_events) - 1):
-                chord_events[i]['duration'] = chord_events[i+1]['time'] - chord_events[i]['time']
+            # Normalize durations if the last one is not set properly
+            if len(chord_events) > 1:
+                for i in range(len(chord_events) - 1):
+                    if i + 1 < len(chord_events):
+                        chord_events[i]['duration'] = chord_events[i+1]['time'] - chord_events[i]['time']
             
             # Limit to MAX_CHORDS_FROM_MIDI
             return chord_events[:MAX_CHORDS_FROM_MIDI]
             
         except Exception as e:
             QMessageBox.critical(self, "MIDI Import Error", 
-                               f"Failed to parse MIDI file: {str(e)}")
+                            f"Failed to parse MIDI file: {str(e)}")
             return []
     
     def recognize_chord_from_notes(self, notes: List[str]) -> Optional[str]:
@@ -580,47 +584,69 @@ Cm13,023579a,"""
         
         if not chord_events:
             QMessageBox.warning(self, "MIDI Import", 
-                              "No valid chords found in MIDI file.\n"
-                              "Make sure the MIDI file contains at least 3 simultaneous notes to form chords.")
+                            "No valid chords found in MIDI file.\n"
+                            "Make sure the MIDI file contains at least 3 simultaneous notes to form chords.")
             return
         
-        # Convert chord events to progression string
+        # Convert chord events to progression string with proper bracketing
         progression_parts = []
         skipped_chords = []
         
-        for idx, event in enumerate(chord_events):
+        i = 0
+        while i < len(chord_events):
+            event = chord_events[i]
             chord_name = self.recognize_chord_from_notes(event['notes'])
             
-            if chord_name:
-                # Handle timing with brackets
-                duration = event.get('duration', 1.0)
-                if duration < 0.9:  # Less than a full beat
-                    # Check if we should group with previous chord
-                    if progression_parts and not progression_parts[-1].endswith(']'):
-                        # Start a new bracket group
-                        progression_parts.append(f"[{chord_name}")
-                    elif progression_parts and progression_parts[-1].endswith(']'):
-                        # Previous was already bracketed, add this as new
-                        progression_parts.append(chord_name)
-                    else:
-                        progression_parts.append(f"[{chord_name}]")
-                else:
-                    # Full beat chord
-                    if progression_parts and progression_parts[-1].startswith('[') and not progression_parts[-1].endswith(']'):
-                        # Close previous bracket
-                        progression_parts[-1] += ']'
-                    progression_parts.append(chord_name)
+            if not chord_name:
+                skipped_chords.append(i + 1)
+                i += 1
+                continue
+            
+            duration = event.get('duration', 1.0)
+            
+            # Check if this single chord is approximately one beat
+            if abs(duration - 1.0) < 0.1:  # Tolerance for one beat
+                progression_parts.append(chord_name)
+                i += 1
             else:
-                skipped_chords.append(idx + 1)
-        
-        # Close any unclosed brackets
-        if progression_parts and progression_parts[-1].startswith('[') and not progression_parts[-1].endswith(']'):
-            progression_parts[-1] += ']'
+                # Try to find combinations that sum to one beat
+                found_group = False
+                
+                # Check up to 4 notes ahead for combinations
+                for group_size in range(2, min(5, len(chord_events) - i + 1)):
+                    total_duration = 0
+                    group_chords = []
+                    all_valid = True
+                    
+                    # Sum durations for this group
+                    for j in range(group_size):
+                        if i + j < len(chord_events):
+                            evt = chord_events[i + j]
+                            name = self.recognize_chord_from_notes(evt['notes'])
+                            if name:
+                                total_duration += evt.get('duration', 1.0)
+                                group_chords.append(name)
+                            else:
+                                all_valid = False
+                                break
+                    
+                    # Check if this group sums to approximately one beat
+                    if all_valid and abs(total_duration - 1.0) < 0.1:
+                        # Found a group that equals one beat
+                        progression_parts.append('[' + ' - '.join(group_chords) + ']')
+                        i += group_size
+                        found_group = True
+                        break
+                
+                # If no group found, treat as single chord (one beat)
+                if not found_group:
+                    progression_parts.append(chord_name)
+                    i += 1
         
         if skipped_chords:
             skipped_str = ', '.join(map(str, skipped_chords))
             QMessageBox.information(self, "Import Notice", 
-                                   f"The following chord positions did not have enough notes and were skipped: {skipped_str}")
+                                f"The following chord positions did not have enough notes and were skipped: {skipped_str}")
         
         if progression_parts:
             progression_str = ' - '.join(progression_parts)
@@ -628,8 +654,8 @@ Cm13,023579a,"""
             self.show_status_message(f"Imported {len(progression_parts)} chords from MIDI")
         else:
             QMessageBox.warning(self, "MIDI Import", 
-                              "Could not recognize any valid chords from the MIDI file.")
-    
+                            "Could not recognize any valid chords from the MIDI file.")
+
     def init_ui(self):
         """Initialize the user interface."""
         self.setWindowTitle("Chord Progression to MIDI Converter")
