@@ -1117,8 +1117,9 @@ Cm13,023579a,"""
             # Add any chords before this bracket
             before_bracket = progression_str[current_pos:match.start()].strip()
             if before_bracket:
-                # Split by common delimiters
-                chords = re.split(r'[–\-—]+', before_bracket)
+                # Split by separators: en/em dashes, or hyphen with spaces on both sides
+                # This preserves chord names like "Cm7-11" while splitting "Cm7 - Am"
+                chords = re.split(r'[–—]+|\s+-\s+', before_bracket)
                 for chord in chords:
                     chord = chord.strip()
                     if chord:
@@ -1126,7 +1127,7 @@ Cm13,023579a,"""
             
             # Process chords in bracket
             bracket_content = match.group(1)
-            chords_in_bracket = re.split(r'[–\-—]+', bracket_content)
+            chords_in_bracket = re.split(r'[–—]+|\s+-\s+', bracket_content)
             chords_in_bracket = [c.strip() for c in chords_in_bracket if c.strip()]
             
             if chords_in_bracket:
@@ -1139,7 +1140,7 @@ Cm13,023579a,"""
         # Add any remaining chords after last bracket
         remaining = progression_str[current_pos:].strip()
         if remaining:
-            chords = re.split(r'[–\-—]+', remaining)
+            chords = re.split(r'[–—]+|\s+-\s+', remaining)
             for chord in chords:
                 chord = chord.strip()
                 if chord:
