@@ -446,15 +446,16 @@ Cm13,023579a,"""
                 else:
                     # Process current chord
                     if len(current_chord) >= 3:  # Need at least 3 notes
-                        # Sort by pitch (highest first)
-                        current_chord.sort(key=lambda x: x['note'], reverse=True)
+                        # Sort by pitch (LOWEST first for bass detection)
+                        current_chord.sort(key=lambda x: x['note'])  # Removed reverse=True
                         
                         # Try progressively from 4 to 8 notes for efficiency
                         chord_found = False
                         for max_notes in range(4, min(9, len(current_chord) + 1)):
                             chord_notes = current_chord[:max_notes]
                             
-                            # Extract note names (ignoring octave)
+                            # Extract note names (ignoring octave) 
+                            # Keep the order: lowest to highest
                             note_names = []
                             for note_info in chord_notes:
                                 midi_num = note_info['note']
@@ -501,7 +502,7 @@ Cm13,023579a,"""
             
             # Process last chord (similar logic with 4-8 note checking)
             if len(current_chord) >= 3:
-                current_chord.sort(key=lambda x: x['note'], reverse=True)
+                current_chord.sort(key=lambda x: x['note'])  # Removed reverse=True
                 
                 chord_found = False
                 for max_notes in range(4, min(9, len(current_chord) + 1)):
@@ -581,79 +582,84 @@ Cm13,023579a,"""
         if len(note_codes) < 3:
             return None
         
-        # Assume first note (lowest) is potential bass
-        bass_code = note_codes[0]
+        # IMPORTANT: The LAST note in the list is the bass (lowest pitch)
+        # because parse_midi_file sorts highest to lowest
+        bass_code = note_codes[-1]  # Changed from [0] to [-1]
         
-        # Use second note as reference for transposition
+        # Use second note from bottom as reference for transposition
         if len(note_codes) > 1:
-            second_note = note_codes[1]
-            
-            # Transpose all notes relative to second note
-            transposed = []
-            for code in note_codes:
-                diff = code - second_note
-                if diff < 0:
-                    diff += 12
-                transposed.append(diff)
-            
-            # The bass note in transposed form
-            bass_transposed = transposed[0]
-            
-            # Convert bass to string code
-            if bass_transposed < 10:
-                bass_str = str(bass_transposed)
-            elif bass_transposed == 10:
-                bass_str = 'a'
-            elif bass_transposed == 11:
-                bass_str = 'b'
-            else:
-                return None
-            
-            # Get remaining notes (excluding bass)
-            remaining = transposed[1:]
-            remaining.sort()
-            
-            # Convert to code string
-            code_string = ''
-            for num in remaining:
-                if num < 10:
-                    code_string += str(num)
-                elif num == 10:
-                    code_string += 'a'
-                elif num == 11:
-                    code_string += 'b'
-            
-            # Check bass chord database
-            for chord_name, chord_info in self.bass_chord_data.items():
-                if chord_info['bass'] == bass_str:
-                    # Check if remaining notes match the chord code
-                    normalized = self.normalize_chord_code(chord_info['code'])
-                    if normalized == code_string:
-                        # Found a match! Now transpose to actual key
-                        # The second note represents the root offset
-                        root_note = None
-                        for name, num in self.note_to_midi.items():
-                            if num == second_note:
-                                root_note = name
-                                break
-                        
-                        if root_note and chord_name.startswith('C'):
-                            # Calculate actual bass note
-                            actual_bass = None
+            # Try using different notes as reference
+            for ref_idx in range(len(note_codes)):
+                if ref_idx == len(note_codes) - 1:  # Skip the bass note itself
+                    continue
+                    
+                reference_note = note_codes[ref_idx]
+                
+                # Transpose all notes relative to reference note
+                transposed = []
+                for code in note_codes:
+                    diff = code - reference_note
+                    if diff < 0:
+                        diff += 12
+                    transposed.append(diff)
+                
+                # The bass note in transposed form
+                bass_transposed = transposed[-1]  # Changed to match bass position
+                
+                # Convert bass to string code
+                if bass_transposed < 10:
+                    bass_str = str(bass_transposed)
+                elif bass_transposed == 10:
+                    bass_str = 'a'
+                elif bass_transposed == 11:
+                    bass_str = 'b'
+                else:
+                    continue
+                
+                # Get remaining notes (excluding bass)
+                remaining = transposed[:-1]  # Changed to exclude last element
+                remaining.sort()
+                
+                # Convert to code string
+                code_string = ''
+                for num in remaining:
+                    if num < 10:
+                        code_string += str(num)
+                    elif num == 10:
+                        code_string += 'a'
+                    elif num == 11:
+                        code_string += 'b'
+                
+                # Check bass chord database
+                for chord_name, chord_info in self.bass_chord_data.items():
+                    if chord_info['bass'] == bass_str:
+                        # Check if remaining notes match the chord code
+                        normalized = self.normalize_chord_code(chord_info['code'])
+                        if normalized == code_string:
+                            # Found a match! Now transpose to actual key
+                            root_note = None
                             for name, num in self.note_to_midi.items():
-                                if num == bass_code % 12:
-                                    actual_bass = name
+                                if num == reference_note % 12:
+                                    root_note = name
                                     break
                             
-                            # Build chord name
-                            result = root_note + chord_name[1:]
-                            
-                            # Replace bass note placeholder with actual bass
-                            if '/' in result and actual_bass:
-                                parts = result.split('/')
-                                result = parts[0] + '/' + actual_bass
-                            
-                            return result
+                            if root_note and chord_name.startswith('C'):
+                                # Calculate actual bass note
+                                actual_bass = None
+                                for name, num in self.note_to_midi.items():
+                                    if num == bass_code % 12:
+                                        actual_bass = name
+                                        break
+                                
+                                # Build chord name
+                                result = root_note + chord_name[1:]
+                                
+                                # Replace bass note placeholder with actual bass
+                                if '/' in result and actual_bass:
+                                    parts = result.split('/')
+                                    result = parts[0] + '/' + actual_bass
+                                
+                                return result
         
         return None
 
