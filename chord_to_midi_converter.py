@@ -804,59 +804,52 @@ Cm13,023579a,"""
             return
         
         # Convert chord events to progression string with proper bracketing
-        progression_parts = []
+        recognized_events = []
         skipped_chords = []
         
-        i = 0
-        while i < len(chord_events):
-            event = chord_events[i]
+        for idx, event in enumerate(chord_events):
             chord_name = self.recognize_chord_from_notes(event['notes'])
-            
             if not chord_name:
-                skipped_chords.append(i + 1)
-                i += 1
+                skipped_chords.append(idx + 1)
                 continue
             
-            duration = event.get('duration', 1.0)
+            recognized_events.append({
+                'name': chord_name,
+                'time': event.get('time', idx),
+                'duration': event.get('duration', 1.0)
+            })
+        
+        beat_tolerance = 0.05
+        progression_parts = []
+        
+        i = 0
+        while i < len(recognized_events):
+            current_event = recognized_events[i]
+            current_time = current_event['time']
+            current_beat_index = int(current_time + beat_tolerance)
             
-            # Check if this single chord is approximately one beat
-            if abs(duration - 1.0) < 0.1:  # Tolerance for one beat
-                progression_parts.append(chord_name)
-                i += 1
+            group = [current_event['name']]
+            j = i + 1
+            
+            while j < len(recognized_events):
+                next_event = recognized_events[j]
+                next_beat_index = int(next_event['time'] + beat_tolerance)
+                
+                within_same_beat = next_beat_index == current_beat_index
+                within_one_beat_span = (next_event['time'] - current_time) < (1.0 + beat_tolerance)
+                
+                if within_same_beat and within_one_beat_span:
+                    group.append(next_event['name'])
+                    j += 1
+                else:
+                    break
+            
+            if len(group) == 1:
+                progression_parts.append(group[0])
             else:
-                # Try to find combinations that sum to one beat
-                found_group = False
-                
-                # Check up to 4 notes ahead for combinations
-                for group_size in range(2, min(5, len(chord_events) - i + 1)):
-                    total_duration = 0
-                    group_chords = []
-                    all_valid = True
-                    
-                    # Sum durations for this group
-                    for j in range(group_size):
-                        if i + j < len(chord_events):
-                            evt = chord_events[i + j]
-                            name = self.recognize_chord_from_notes(evt['notes'])
-                            if name:
-                                total_duration += evt.get('duration', 1.0)
-                                group_chords.append(name)
-                            else:
-                                all_valid = False
-                                break
-                    
-                    # Check if this group sums to approximately one beat
-                    if all_valid and abs(total_duration - 1.0) < 0.1:
-                        # Found a group that equals one beat
-                        progression_parts.append('[' + ' - '.join(group_chords) + ']')
-                        i += group_size
-                        found_group = True
-                        break
-                
-                # If no group found, treat as single chord (one beat)
-                if not found_group:
-                    progression_parts.append(chord_name)
-                    i += 1
+                progression_parts.append('[' + ' - '.join(group) + ']')
+            
+            i = j
         
         if skipped_chords:
             skipped_str = ', '.join(map(str, skipped_chords))
@@ -876,7 +869,7 @@ Cm13,023579a,"""
 
     def init_ui(self):
         """Initialize the user interface."""
-        self.setWindowTitle("Chord Progression to MIDI Converter v1.2")
+        self.setWindowTitle("Chord Progression to MIDI Converter v1.3")
         self.setGeometry(100, 100, 900, 750)
         
         # Set application style
@@ -1323,6 +1316,23 @@ Cm13,023579a,"""
         
         return bass_notes + notes
     
+    def sanitize_progression_token(self, token: str) -> str:
+        """Clean up chord tokens extracted from the progression string."""
+        if not token:
+            return ""
+        
+        cleaned = token.strip()
+        
+        # Remove leading separators (hyphen, en dash, em dash)
+        while cleaned and cleaned[0] in ['-', '–', '—']:
+            cleaned = cleaned[1:].lstrip()
+        
+        # Remove trailing separators if they remain after splitting
+        while cleaned and cleaned[-1] in ['-', '–', '—']:
+            cleaned = cleaned[:-1].rstrip()
+        
+        return cleaned
+    
     def parse_progression(self, progression_str: str) -> List[Dict[str, any]]:
         """Parse chord progression string with timing information."""
         # Regular expression to find brackets
@@ -1339,14 +1349,15 @@ Cm13,023579a,"""
                 # This preserves chord names like "Cm7-11" while splitting "Cm7 - Am"
                 chords = re.split(r'[–—]+|\s+-\s+', before_bracket)
                 for chord in chords:
-                    chord = chord.strip()
+                    chord = self.sanitize_progression_token(chord)
                     if chord:
                         progression_items.append({'chord': chord, 'duration': 1.0})
             
             # Process chords in bracket
             bracket_content = match.group(1)
             chords_in_bracket = re.split(r'[–—]+|\s+-\s+', bracket_content)
-            chords_in_bracket = [c.strip() for c in chords_in_bracket if c.strip()]
+            chords_in_bracket = [self.sanitize_progression_token(c) for c in chords_in_bracket]
+            chords_in_bracket = [c for c in chords_in_bracket if c]
             
             if chords_in_bracket:
                 duration = 1.0 / len(chords_in_bracket)
@@ -1360,7 +1371,7 @@ Cm13,023579a,"""
         if remaining:
             chords = re.split(r'[–—]+|\s+-\s+', remaining)
             for chord in chords:
-                chord = chord.strip()
+                chord = self.sanitize_progression_token(chord)
                 if chord:
                     progression_items.append({'chord': chord, 'duration': 1.0})
         
