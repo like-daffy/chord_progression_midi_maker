@@ -360,8 +360,13 @@ Cm13,023579a,"""
             }
             
             # Create normalized code for chord recognition
+            # Only add to code_to_chord_map if it's NOT a slash chord
             normalized_code = self.normalize_chord_code(chord_code)
-            self.code_to_chord_map[normalized_code] = chord_name
+            if '/' not in chord_name:
+                self.code_to_chord_map[normalized_code] = chord_name
+            elif normalized_code not in self.code_to_chord_map:
+                # Only add slash chord if no regular chord exists with this code
+                self.code_to_chord_map[normalized_code] = chord_name
     
     def normalize_chord_code(self, code: str) -> str:
         """Normalize chord code by converting octave-shifted notes to base octave and sorting."""
@@ -384,6 +389,45 @@ Cm13,023579a,"""
         letters = sorted([c for c in normalized if c.isalpha()])
         
         return ''.join(numbers + letters)
+    
+    def validate_bass_note(self, chord: str, available_notes: List[str]) -> str:
+        """Validate that bass note in chord actually exists in available notes."""
+        if '/' not in chord:
+            return chord
+        
+        parts = chord.split('/')
+        if len(parts) != 2:
+            return chord
+        
+        chord_part, bass_note = parts
+        
+        # Check if bass note exists in available notes
+        if bass_note not in available_notes:
+            # Bass note doesn't exist, return chord without bass
+            return chord_part
+        
+        return chord
+    
+    def clean_chord_name(self, chord: Optional[str]) -> Optional[str]:
+        """Remove redundant slash notation when bass matches the chord root."""
+        if not chord or '/' not in chord:
+            return chord
+        
+        parts = chord.split('/')
+        if len(parts) != 2:
+            return chord
+        
+        chord_root, chord_bass = parts
+        
+        if len(chord_root) > 1 and chord_root[1] in ['#', 'b']:
+            root_only = chord_root[:2]
+        else:
+            root_only = chord_root[:1]
+        
+        if chord_bass == root_only:
+            return chord_root
+        
+        return chord
     
     def alphabet_to_number(self, char: str) -> int:
         """Convert alphabet code to number for chord recognition."""
@@ -665,23 +709,7 @@ Cm13,023579a,"""
                                 parts = result.split('/')
                                 result = parts[0] + '/' + actual_bass
                             
-                            # FIX 1: Check if bass note is same as root note
-                            # If so, remove the redundant bass notation
-                            if '/' in result:
-                                parts = result.split('/')
-                                chord_root = parts[0]
-                                chord_bass = parts[1]
-                                
-                                # Extract just the root note from the chord name
-                                if len(chord_root) > 1 and chord_root[1] == '#':
-                                    root_only = chord_root[:2]
-                                else:
-                                    root_only = chord_root[0]
-                                
-                                # If bass equals root, return chord without bass
-                                if chord_bass == root_only:
-                                    return parts[0]  # Return just the chord without /bass
-                            
+                            result = self.clean_chord_name(result)
                             return result
         
         return None
@@ -753,11 +781,15 @@ Cm13,023579a,"""
                 # Replace C with actual root
                 if base_chord.startswith('C'):
                     if len(base_chord) > 1 and base_chord[1] not in ['/', '#', 'b', 'm']:
-                        return root_note + base_chord[1:]
+                        final_chord = root_note + base_chord[1:]
                     elif len(base_chord) > 1 and base_chord[1] == 'm':
-                        return root_note + base_chord[1:]
+                        final_chord = root_note + base_chord[1:]
                     else:
-                        return root_note if len(base_chord) == 1 else root_note + base_chord[1:]
+                        final_chord = root_note if len(base_chord) == 1 else root_note + base_chord[1:]
+                    
+                    # Validate bass note if present
+                    final_chord = self.validate_bass_note(final_chord, unique_notes)
+                    return self.clean_chord_name(final_chord)
         
         return None
     
@@ -834,7 +866,10 @@ Cm13,023579a,"""
         if progression_parts:
             progression_str = ' - '.join(progression_parts)
             self.chord_input.setText(progression_str)
-            self.show_status_message(f"Imported {len(progression_parts)} chords from MIDI")
+            
+            # Automatically process chords to update MIDI preview and file
+            self.process_chords()
+            self.show_status_message(f"Imported {len(progression_parts)} chords from MIDI and updated preview")
         else:
             QMessageBox.warning(self, "MIDI Import", 
                             "Could not recognize any valid chords from the MIDI file.")
