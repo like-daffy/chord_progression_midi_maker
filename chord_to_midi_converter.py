@@ -583,14 +583,13 @@ Cm13,023579a,"""
             return None
         
         # The FIRST note in the list is the bass (lowest pitch)
-        # because parse_midi_file now sorts lowest to highest
         bass_code = note_codes[0]
         bass_note_name = unique_notes[0]
         
         # If we only have 3 notes total, duplicate the bass note for chord recognition
         if len(note_codes) == 3:
             # Add bass note to the chord notes (as if it appears in a higher octave)
-            note_codes_for_chord = note_codes[1:] + [bass_code]  # Add bass to the remaining notes
+            note_codes_for_chord = note_codes[1:] + [bass_code]
             unique_notes_for_chord = unique_notes[1:] + [bass_note_name]
         else:
             # Use all notes except bass for chord recognition
@@ -666,6 +665,23 @@ Cm13,023579a,"""
                                 parts = result.split('/')
                                 result = parts[0] + '/' + actual_bass
                             
+                            # FIX 1: Check if bass note is same as root note
+                            # If so, remove the redundant bass notation
+                            if '/' in result:
+                                parts = result.split('/')
+                                chord_root = parts[0]
+                                chord_bass = parts[1]
+                                
+                                # Extract just the root note from the chord name
+                                if len(chord_root) > 1 and chord_root[1] == '#':
+                                    root_only = chord_root[:2]
+                                else:
+                                    root_only = chord_root[0]
+                                
+                                # If bass equals root, return chord without bass
+                                if chord_bass == root_only:
+                                    return parts[0]  # Return just the chord without /bass
+                            
                             return result
         
         return None
@@ -675,12 +691,8 @@ Cm13,023579a,"""
         if len(notes) < 3:
             return None
         
-        # Try bass note recognition first
-        bass_chord = self.recognize_chord_with_bass(notes)
-        if bass_chord:
-            return bass_chord
-        
-        # Remove duplicates while preserving order
+        # Try bass note recognition first ONLY if we have 4+ unique notes
+        # or if the lowest note doesn't match typical chord roots
         unique_notes = []
         seen = set()
         for note in notes:
@@ -690,6 +702,12 @@ Cm13,023579a,"""
         
         if len(unique_notes) < 3:
             return None
+        
+        # Only try bass recognition if we have enough notes or unusual bass
+        if len(unique_notes) >= 4:  # Changed: only try bass recognition with 4+ unique notes
+            bass_chord = self.recognize_chord_with_bass(notes)
+            if bass_chord:
+                return bass_chord
         
         # Convert notes to codes
         note_codes = []
