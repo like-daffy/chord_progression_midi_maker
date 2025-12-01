@@ -1054,7 +1054,7 @@ Cm13,023579a,"""
         input_group = QGroupBox("Chord Progression Input")
         input_layout = QGridLayout()
         
-        # Row 0: Octave selection (extended to include 6 and 7)
+        # Row 0: Octave selection and Import Unit (grouped together)
         octave_label = QLabel("Octave:")
         self.octave_combo = QComboBox()
         self.octave_combo.addItems(["2", "3", "4", "5", "6", "7"])
@@ -1062,7 +1062,8 @@ Cm13,023579a,"""
         self.octave_combo.setMaximumWidth(100)
         
         # Import time unit selection (Bar = 4 beats, Beat = 1 beat)
-        import_unit_label = QLabel("Import Unit:")
+        import_unit_label = QLabel("  Import Unit:")
+        import_unit_label.setStyleSheet("margin-left: 20px;")
         self.bar_radio = QRadioButton("Bar")
         self.beat_radio = QRadioButton("Beat")
         self.bar_radio.setChecked(True)  # Default to Bar mode
@@ -1072,16 +1073,16 @@ Cm13,023579a,"""
         self.import_unit_group.addButton(self.bar_radio, 0)
         self.import_unit_group.addButton(self.beat_radio, 1)
         
-        # Layout for radio buttons
-        import_unit_layout = QHBoxLayout()
-        import_unit_layout.addWidget(self.bar_radio)
-        import_unit_layout.addWidget(self.beat_radio)
-        import_unit_layout.addStretch()
+        # Create horizontal layout for Row 0 controls (Octave + Import Unit)
+        row0_layout = QHBoxLayout()
+        row0_layout.addWidget(octave_label)
+        row0_layout.addWidget(self.octave_combo)
+        row0_layout.addWidget(import_unit_label)
+        row0_layout.addWidget(self.bar_radio)
+        row0_layout.addWidget(self.beat_radio)
+        row0_layout.addStretch()
         
-        input_layout.addWidget(octave_label, 0, 0)
-        input_layout.addWidget(self.octave_combo, 0, 1)
-        input_layout.addWidget(import_unit_label, 0, 2)
-        input_layout.addLayout(import_unit_layout, 0, 3, 1, 2)
+        input_layout.addLayout(row0_layout, 0, 0, 1, 5)
         
         # Row 1: BPM control
         bpm_label = QLabel("BPM:")
@@ -1201,6 +1202,9 @@ Cm13,023579a,"""
         
         # Set up keyboard shortcuts
         self.chord_input.returnPressed.connect(self.process_chords)
+        
+        # Set default focus to chord progression input
+        self.chord_input.setFocus()
     
     def on_bpm_slider_changed(self, value):
         """Handle BPM slider changes."""
