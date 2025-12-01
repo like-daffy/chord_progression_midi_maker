@@ -283,14 +283,14 @@ class ChordToMIDIQt(QMainWindow):
 C,047,
 Cm,037,
 C7,047a,
-C7-13,0479a,
+C7(13),0479a,
 CM7,047b,
 Cmaj7,04bj,
 Cmaj9,047be,
 Cmaj11,047bde,
 Cm7,037a,
-Cm7-5,036a,
-Cm-5,036,
+Cm7(b5),036a,
+Cm(b5),036,
 Cm7/F,037a,5
 Cm7/A#,037a,a
 Cm/D#,037,3
@@ -300,6 +300,7 @@ Cdim7,0369,
 Caug,048,
 Csus2,027,
 Csus4,057,
+C7sus2,027m,
 C7sus4,057a,
 C/D,047,2
 C/E,047,4
@@ -313,31 +314,31 @@ C9,047ae,
 Cm9,037ae,
 CM9,047be,
 C9sus4,057ae,
-Cadd9,047e,
-Cadd11(add9),02457,
+C(add9),047e,
+"C(add9,add11)",02457,
 C69,0479e,
 Cm69,0379e,
-C-5,046,
-C7-5,046a,
-C7+5,048a,
-CM7-5,046b,
-Cm7+5,038a,
+C(b5),046,
+C7(b5),046a,
+C7(b9),047ad,
+C7(#5),048a,
+CM7(b5),046b,
+Cm7(#5),038a,
 C11,047ah,
 C4.4,05af,
-C7b13,0478a,
-C7add9,0247a,
-C7sus2,027a,
-C7susb5,046a,
-Cm7b5,036a,
-Cm7b9,0137a,
-Cm7-11,0357a,
-Cm7add9,0237a,
-Cm7add11,0357a,
+C7(b13),0478a,
+C7(add9),0247a,
+C7sus(b5),046a,
+Cm7(b5),036a,
+Cm7(b9),0137a,
+Cm7(11),0357a,
+Cm7(add9),0237a,
+Cm7(add11),0357a,
 Cdim,036,
 Cm11,02357a,
-Cm11b13,023578a,
-Cm11b9,01357a,
-Cm11b9b13,013578a,
+Cm11(b13),023578a,
+Cm11(b9),01357a,
+"Cm11(b9,b13)",013578a,
 Cm13,023579a,"""
         
         # Parse CSV data
@@ -362,6 +363,20 @@ Cm13,023579a,"""
                 'code': chord_code,
                 'bass': bass_note
             }
+
+            # Create alias for flexible input (remove parentheses and commas)
+            # e.g., Cm11(b9,b13) -> Cm11b9b13
+            clean_name = chord_name.replace('(', '').replace(')', '').replace(',', '')
+            if clean_name != chord_name:
+                if bass_note:
+                    self.bass_chord_data[clean_name] = {
+                        'code': chord_code,
+                        'bass': bass_note
+                    }
+                self.chord_data[clean_name] = {
+                    'code': chord_code,
+                    'bass': bass_note
+                }
             
             # Create normalized code for chord recognition
             # Only add to code_to_chord_map if it's NOT a slash chord
@@ -430,6 +445,14 @@ Cm13,023579a,"""
         
         if chord_bass == root_only:
             return chord_root
+        
+        # Check for enharmonic equivalence (e.g. G# vs Ab)
+        # Normalize both root_only and chord_bass to MIDI number (0-11)
+        root_num = self.note_to_midi.get(root_only)
+        bass_num = self.note_to_midi.get(chord_bass)
+        
+        if root_num is not None and bass_num is not None and root_num == bass_num:
+             return chord_root
         
         return chord
     
@@ -736,7 +759,7 @@ Cm13,023579a,"""
             return None
         
         # Only try bass recognition if we have enough notes or unusual bass
-        if len(unique_notes) >= 4:  # Changed: only try bass recognition with 4+ unique notes
+        if len(unique_notes) >= 3:  # Changed: allow bass recognition with 3+ unique notes (e.g. triads like C/E)
             bass_chord = self.recognize_chord_with_bass(notes)
             if bass_chord:
                 return bass_chord
@@ -817,9 +840,14 @@ Cm13,023579a,"""
                 skipped_chords.append(idx + 1)
                 continue
             
+            # Quantize time to nearest 1/32 beat (0.03125) to fix timing drift
+            # This ensures slightly off-grid notes snap to the grid for proper beat grouping
+            raw_time = event.get('time', idx)
+            quantized_time = round(raw_time * 32) / 32.0
+            
             recognized_events.append({
                 'name': chord_name,
-                'time': event.get('time', idx),
+                'time': quantized_time,
                 'duration': event.get('duration', 1.0)
             })
         
