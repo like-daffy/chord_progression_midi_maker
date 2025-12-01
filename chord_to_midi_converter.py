@@ -20,7 +20,8 @@ from collections import defaultdict
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QComboBox, QTextEdit, QGroupBox,
-    QFileDialog, QMessageBox, QGridLayout, QSlider, QFrame
+    QFileDialog, QMessageBox, QGridLayout, QSlider, QFrame, QRadioButton,
+    QButtonGroup
 )
 from PyQt6.QtCore import Qt, QMimeData, QUrl, QPoint, pyqtSignal, QThread, pyqtSlot, QTimer
 from PyQt6.QtGui import QDrag, QDragEnterEvent, QDropEvent, QMouseEvent, QFont, QIntValidator
@@ -471,6 +472,25 @@ Cm13,023579a,"""
                     return self.note_to_midi[note] + 12 * octave
         return -1
     
+    def round_duration_to_subdivision(self, duration: float, tolerance: float = 0.1) -> float:
+        """Round duration to nearest common musical subdivision (1, 0.5, 0.25, 0.125).
+        
+        This handles timing drift in MIDI files where 0.49 beat should be treated as 0.5 beat.
+        """
+        subdivisions = [1.0, 0.5, 0.25, 0.125]
+        
+        for subdiv in subdivisions:
+            if abs(duration - subdiv) <= tolerance:
+                return subdiv
+            # Check multiples of the subdivision
+            if subdiv < duration:
+                multiple = round(duration / subdiv)
+                if abs(duration - multiple * subdiv) <= tolerance:
+                    return multiple * subdiv
+        
+        # For unusual durations, round to nearest 1/8 beat
+        return round(duration * 8) / 8
+    
     def parse_midi_file(self, filepath: str) -> List[Dict]:
         """Parse MIDI file and extract chord information."""
         if not MIDO_AVAILABLE:
@@ -840,40 +860,65 @@ Cm13,023579a,"""
                 skipped_chords.append(idx + 1)
                 continue
             
-            # Quantize time to nearest 1/32 beat (0.03125) to fix timing drift
-            # This ensures slightly off-grid notes snap to the grid for proper beat grouping
-            raw_time = event.get('time', idx)
-            quantized_time = round(raw_time * 32) / 32.0
+            # Round duration to nearest musical subdivision (handles timing drift)
+            # e.g., 0.49 beat -> 0.5 beat, 0.52 beat -> 0.5 beat
+            raw_duration = event.get('duration', 1.0)
+            rounded_duration = self.round_duration_to_subdivision(raw_duration)
             
             recognized_events.append({
                 'name': chord_name,
-                'time': quantized_time,
-                'duration': event.get('duration', 1.0)
+                'time': event.get('time', idx),
+                'duration': rounded_duration
             })
         
-        beat_tolerance = 0.05
+        # Determine grouping unit based on radio button selection
+        # Bar mode: 1 bar = 4 beats, Beat mode: 1 beat
+        if self.bar_radio.isChecked():
+            unit_beats = 4.0  # 1 bar = 4 beats
+            unit_name = "bar"
+        else:
+            unit_beats = 1.0  # 1 beat
+            unit_name = "beat"
+        
+        # Use duration-based grouping for more robust detection
+        # Chords with duration < unit_beats are grouped together if they sum to ~unit_beats
+        tolerance = 0.15 * unit_beats  # 15% tolerance scaled to unit
         progression_parts = []
         
         i = 0
         while i < len(recognized_events):
             current_event = recognized_events[i]
-            current_time = current_event['time']
-            current_beat_index = int(current_time + beat_tolerance)
+            current_duration = current_event['duration']
             
+            # If this chord has duration >= unit_beats (with tolerance), it's a full unit by itself
+            if current_duration >= unit_beats - tolerance:
+                progression_parts.append(current_event['name'])
+                i += 1
+                continue
+            
+            # This chord has duration < unit_beats, look for others to group with
             group = [current_event['name']]
+            cumulative_duration = current_duration
             j = i + 1
             
             while j < len(recognized_events):
                 next_event = recognized_events[j]
-                next_beat_index = int(next_event['time'] + beat_tolerance)
+                next_duration = next_event['duration']
                 
-                within_same_beat = next_beat_index == current_beat_index
-                within_one_beat_span = (next_event['time'] - current_time) < (1.0 + beat_tolerance)
+                # If adding this chord would significantly exceed unit_beats, stop
+                if cumulative_duration + next_duration > unit_beats + tolerance:
+                    break
                 
-                if within_same_beat and within_one_beat_span:
-                    group.append(next_event['name'])
-                    j += 1
-                else:
+                # If this next chord has duration >= unit_beats, it's a full unit by itself
+                if next_duration >= unit_beats - tolerance:
+                    break
+                
+                group.append(next_event['name'])
+                cumulative_duration += next_duration
+                j += 1
+                
+                # If we've accumulated approximately unit_beats, stop grouping
+                if cumulative_duration >= unit_beats - tolerance:
                     break
             
             if len(group) == 1:
@@ -901,7 +946,7 @@ Cm13,023579a,"""
 
     def init_ui(self):
         """Initialize the user interface."""
-        self.setWindowTitle("Chord Progression to MIDI Converter v1.3")
+        self.setWindowTitle("Chord Progression to MIDI Converter v1.4")
         self.setGeometry(100, 100, 900, 750)
         
         # Set application style
@@ -1016,8 +1061,27 @@ Cm13,023579a,"""
         self.octave_combo.setCurrentText("4")  # Default changed to 4
         self.octave_combo.setMaximumWidth(100)
         
+        # Import time unit selection (Bar = 4 beats, Beat = 1 beat)
+        import_unit_label = QLabel("Import Unit:")
+        self.bar_radio = QRadioButton("Bar")
+        self.beat_radio = QRadioButton("Beat")
+        self.bar_radio.setChecked(True)  # Default to Bar mode
+        
+        # Group the radio buttons
+        self.import_unit_group = QButtonGroup(self)
+        self.import_unit_group.addButton(self.bar_radio, 0)
+        self.import_unit_group.addButton(self.beat_radio, 1)
+        
+        # Layout for radio buttons
+        import_unit_layout = QHBoxLayout()
+        import_unit_layout.addWidget(self.bar_radio)
+        import_unit_layout.addWidget(self.beat_radio)
+        import_unit_layout.addStretch()
+        
         input_layout.addWidget(octave_label, 0, 0)
         input_layout.addWidget(self.octave_combo, 0, 1)
+        input_layout.addWidget(import_unit_label, 0, 2)
+        input_layout.addLayout(import_unit_layout, 0, 3, 1, 2)
         
         # Row 1: BPM control
         bpm_label = QLabel("BPM:")
