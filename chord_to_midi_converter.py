@@ -326,6 +326,7 @@ C7(#5),048a,
 CM7(b5),046b,
 Cm7(#5),038a,
 C11,047ah,
+C13,0259a,
 C4.4,05af,
 C7(b13),0478a,
 C7(add9),0247a,
@@ -1061,9 +1062,9 @@ Cm13,023579a,"""
         self.octave_combo.setCurrentText("4")  # Default changed to 4
         self.octave_combo.setMaximumWidth(100)
         
-        # Import time unit selection (Bar = 4 beats, Beat = 1 beat)
-        import_unit_label = QLabel("  Import Unit:")
-        import_unit_label.setStyleSheet("margin-left: 20px;")
+        # Time unit selection (Bar = 4 beats, Beat = 1 beat) - applies to both import and export
+        unit_label = QLabel("  Unit:")
+        unit_label.setStyleSheet("margin-left: 20px;")
         self.bar_radio = QRadioButton("Bar")
         self.beat_radio = QRadioButton("Beat")
         self.bar_radio.setChecked(True)  # Default to Bar mode
@@ -1077,7 +1078,7 @@ Cm13,023579a,"""
         row0_layout = QHBoxLayout()
         row0_layout.addWidget(octave_label)
         row0_layout.addWidget(self.octave_combo)
-        row0_layout.addWidget(import_unit_label)
+        row0_layout.addWidget(unit_label)
         row0_layout.addWidget(self.bar_radio)
         row0_layout.addWidget(self.beat_radio)
         row0_layout.addStretch()
@@ -1518,8 +1519,15 @@ Cm13,023579a,"""
         
         return True, None
 
-    def create_midi(self, progression_items: List[Dict], octave: int, bpm: int = 120) -> Optional[MIDIFile]:
-        """Create MIDI file from progression items with specified BPM."""
+    def create_midi(self, progression_items: List[Dict], octave: int, bpm: int = 120, unit_beats: float = 1.0) -> Optional[MIDIFile]:
+        """Create MIDI file from progression items with specified BPM.
+        
+        Args:
+            progression_items: List of chord items with duration
+            octave: Base octave for notes
+            bpm: Beats per minute
+            unit_beats: Time unit multiplier (1.0 for Beat mode, 4.0 for Bar mode)
+        """
         midi = MIDIFile(1)
         track = 0
         channel = 0
@@ -1532,7 +1540,8 @@ Cm13,023579a,"""
         
         for item in progression_items:
             chord_name = item['chord']
-            duration = item['duration']
+            # Apply unit multiplier to duration (Bar mode = 4x, Beat mode = 1x)
+            duration = item['duration'] * unit_beats
             
             notes = self.get_chord_notes(chord_name, octave)
             
@@ -1566,13 +1575,17 @@ Cm13,023579a,"""
         try:
             octave = int(self.octave_combo.currentText())
             bpm = self.bpm
+            
+            # Get unit multiplier based on Bar/Beat selection
+            unit_beats = 4.0 if self.bar_radio.isChecked() else 1.0
+            
             progression_items = self.parse_progression(progression_str)
             
             if not progression_items:
                 QMessageBox.warning(self, "No Chords", "No valid chords found in the progression.")
                 return
             
-            midi_file = self.create_midi(progression_items, octave, bpm)
+            midi_file = self.create_midi(progression_items, octave, bpm, unit_beats)
             
             if midi_file:
                 # Generate filename based on progression
@@ -1589,9 +1602,10 @@ Cm13,023579a,"""
                 self.midi_display.set_midi_file(temp_file.name, filename)
                 
                 # Update display
+                unit_name = "Bar" if unit_beats == 4.0 else "Beat"
                 info_text = f"✓ MIDI File Created Successfully!\n\n"
                 info_text += f"Chord Progression: {progression_str}\n"
-                info_text += f"Octave: {octave} | BPM: {bpm}\n"
+                info_text += f"Octave: {octave} | BPM: {bpm} | Unit: {unit_name}\n"
                 info_text += f"Number of chords: {len(progression_items)}\n\n"
                 info_text += "🎵 Click 'Preview' to listen to the MIDI\n"
                 info_text += "📁 Drag this area to Desktop or any folder to save the MIDI file\n"
