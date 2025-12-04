@@ -33,6 +33,37 @@ try {
     exit 1
 }
 
+# Check if virtual environment is activated
+Write-Host "Checking virtual environment..." -ForegroundColor Yellow
+if (-not $env:VIRTUAL_ENV) {
+    Write-Host "Virtual environment is not activated" -ForegroundColor Yellow
+    
+    # Check if .venv exists
+    $VENV_PATH = ".\.venv\Scripts\Activate.ps1"
+    if (Test-Path $VENV_PATH) {
+        Write-Host "Activating virtual environment: $VENV_PATH" -ForegroundColor Yellow
+        try {
+            & $VENV_PATH
+            if ($LASTEXITCODE -eq 0 -or $env:VIRTUAL_ENV) {
+                Write-Host "Virtual environment activated successfully!" -ForegroundColor Green
+            } else {
+                Write-Host "WARNING: Failed to activate virtual environment" -ForegroundColor Yellow
+                Write-Host "Proceeding with system Python..." -ForegroundColor Yellow
+            }
+        } catch {
+            Write-Host "WARNING: Error activating virtual environment" -ForegroundColor Yellow
+            Write-Host $_.Exception.Message -ForegroundColor Yellow
+            Write-Host "Proceeding with system Python..." -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "WARNING: Virtual environment not found at $VENV_PATH" -ForegroundColor Yellow
+        Write-Host "Proceeding with system Python..." -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "Virtual environment is already activated: $env:VIRTUAL_ENV" -ForegroundColor Green
+}
+Write-Host ""
+
 Write-Host "Installing dependencies..." -ForegroundColor Yellow
 Write-Host ""
 
