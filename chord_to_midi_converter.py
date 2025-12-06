@@ -529,111 +529,88 @@ Cm13,023579a,"""
             chord_events = []
             current_chord = []
             current_time = -1
-            time_threshold = 0.05  # Notes within this time are considered simultaneous
+            # Increased threshold for better "human" feel (0.12 is approx 60ms at 120bpm)
+            time_threshold = 0.12 
             
-            for event in note_events:
-                if current_time < 0 or abs(event['time'] - current_time) < time_threshold:
-                    current_chord.append(event)
-                    if current_time < 0:
-                        current_time = event['time']
-                else:
-                    # Process current chord
-                    if len(current_chord) >= 3:  # Need at least 3 notes
-                        # Sort by pitch (LOWEST first for bass detection)
-                        current_chord.sort(key=lambda x: x['note'])  # Removed reverse=True
-                        
-                        # Try progressively from 4 to 8 notes for efficiency
-                        chord_found = False
-                        for max_notes in range(4, min(9, len(current_chord) + 1)):
-                            chord_notes = current_chord[:max_notes]
-                            
-                            # Extract note names (ignoring octave) 
-                            # Keep the order: lowest to highest
-                            note_names = []
-                            for note_info in chord_notes:
-                                midi_num = note_info['note']
-                                note_num = midi_num % 12
-                                
-                                # Convert to note name
-                                for name, num in self.note_to_midi.items():
-                                    if num == note_num:
-                                        note_names.append(name)
-                                        break
-                            
-                            # Try to recognize chord with current number of notes
-                            test_chord = self.recognize_chord_from_notes(note_names)
-                            if test_chord:
-                                chord_events.append({
-                                    'notes': note_names,
-                                    'time': current_time,
-                                    'duration': event['time'] - current_time
-                                })
-                                chord_found = True
+            def process_chord_group(group, timestamp, original_duration):
+                if len(group) < 3:
+                    return
+                
+                # Sort by pitch (LOWEST first for bass detection)
+                group.sort(key=lambda x: x['note'])
+                
+                # Try finding chord using the maximum available notes first (Priority: Complexity)
+                # We iterate backwards from all notes down to 3
+                max_notes_to_check = len(group)
+                min_notes_to_check = 3
+                
+                chord_found = False
+                
+                # Loop: Try 8 notes, then 7, ..., down to 3
+                for n_notes in range(min(9, max_notes_to_check), min_notes_to_check - 1, -1):
+                    subset_notes = group[:n_notes]
+                    
+                    note_names = []
+                    for note_info in subset_notes:
+                        midi_num = note_info['note']
+                        note_num = midi_num % 12
+                        for name, num in self.note_to_midi.items():
+                            if num == note_num:
+                                note_names.append(name)
                                 break
-                        
-                        # If no chord found with up to 8 notes, use first 4
-                        if not chord_found:
-                            chord_notes = current_chord[:4]
-                            note_names = []
-                            for note_info in chord_notes:
-                                midi_num = note_info['note']
-                                note_num = midi_num % 12
-                                for name, num in self.note_to_midi.items():
-                                    if num == note_num:
-                                        note_names.append(name)
-                                        break
-                            
-                            chord_events.append({
-                                'notes': note_names,
-                                'time': current_time,
-                                'duration': event['time'] - current_time
-                            })
+                    
+                    # Try to recognize
+                    test_chord = self.recognize_chord_from_notes(note_names)
+                    if test_chord:
+                        chord_events.append({
+                            'notes': note_names,
+                            'time': timestamp,
+                            'duration': original_duration
+                        })
+                        return True
+                
+                # Fallback: if huge cluster but no match, take bottom 4 notes
+                if not chord_found and len(group) > 4:
+                     group_4 = group[:4]
+                     note_names = []
+                     for note_info in group_4:
+                        midi_num = note_info['note']
+                        note_num = midi_num % 12
+                        for name, num in self.note_to_midi.items():
+                            if num == note_num:
+                                note_names.append(name)
+                                break
+                     
+                     # Force recognition attempt on triad + 1
+                     fallback = self.recognize_chord_from_notes(note_names)
+                     if fallback:
+                         chord_events.append({
+                            'notes': note_names,
+                            'time': timestamp,
+                            'duration': original_duration
+                         })
+                         return True
+                return False
+
+            for event in note_events:
+                if current_time < 0:
+                    current_time = event['time']
+                    current_chord.append(event)
+                elif abs(event['time'] - current_time) < time_threshold:
+                    current_chord.append(event)
+                    # Keep time as the FIRST note time for stability
+                else:
+                    # Time gap detected -> Process previous chord
+                    if len(current_chord) >= 3:
+                        process_chord_group(current_chord, current_time, event['time'] - current_time)
                     
                     # Start new chord
                     current_chord = [event]
                     current_time = event['time']
             
-            # Process last chord (similar logic with 4-8 note checking)
+            # Process last chord
             if len(current_chord) >= 3:
-                current_chord.sort(key=lambda x: x['note'])  # Removed reverse=True
-                
-                chord_found = False
-                for max_notes in range(4, min(9, len(current_chord) + 1)):
-                    chord_notes = current_chord[:max_notes]
-                    note_names = []
-                    for note_info in chord_notes:
-                        midi_num = note_info['note']
-                        note_num = midi_num % 12
-                        for name, num in self.note_to_midi.items():
-                            if num == note_num:
-                                note_names.append(name)
-                                break
-                    
-                    test_chord = self.recognize_chord_from_notes(note_names)
-                    if test_chord:
-                        chord_events.append({
-                            'notes': note_names,
-                            'time': current_time,
-                            'duration': 1.0
-                        })
-                        chord_found = True
-                        break
-                
-                if not chord_found:
-                    chord_notes = current_chord[:4]
-                    note_names = []
-                    for note_info in chord_notes:
-                        midi_num = note_info['note']
-                        note_num = midi_num % 12
-                        for name, num in self.note_to_midi.items():
-                            if num == note_num:
-                                note_names.append(name)
-                                break
-                    chord_events.append({
-                        'notes': note_names,
-                        'time': current_time,
-                        'duration': 1.0
-                    })
+                process_chord_group(current_chord, current_time, 1.0)
             
             # Normalize durations
             if len(chord_events) > 1:
@@ -677,17 +654,14 @@ Cm13,023579a,"""
         
         # The FIRST note in the list is the bass (lowest pitch)
         bass_code = note_codes[0]
-        bass_note_name = unique_notes[0]
         
-        # If we only have 3 notes total, duplicate the bass note for chord recognition
+        # Use all notes except bass for chord recognition (if enough notes)
         if len(note_codes) == 3:
-            # Add bass note to the chord notes (as if it appears in a higher octave)
             note_codes_for_chord = note_codes[1:] + [bass_code]
-            unique_notes_for_chord = unique_notes[1:] + [bass_note_name]
         else:
-            # Use all notes except bass for chord recognition
             note_codes_for_chord = note_codes[1:]
-            unique_notes_for_chord = unique_notes[1:]
+        
+        candidates = [] 
         
         # Try using different notes as reference for transposition
         for ref_idx in range(len(note_codes_for_chord)):
@@ -732,10 +706,9 @@ Cm13,023579a,"""
             # Check bass chord database
             for chord_name, chord_info in self.bass_chord_data.items():
                 if chord_info['bass'] == bass_str:
-                    # Check if chord notes match the chord code
                     normalized = self.normalize_chord_code(chord_info['code'])
                     if normalized == code_string:
-                        # Found a match! Now transpose to actual key
+                        # Found a match! Calculate actual chord
                         root_note = None
                         for name, num in self.note_to_midi.items():
                             if num == reference_note % 12:
@@ -751,15 +724,27 @@ Cm13,023579a,"""
                                     break
                             
                             # Build chord name
-                            result = root_note + chord_name[1:]
+                            if len(chord_name) > 1 and chord_name[1] not in ['/', '#', 'b', 'm']:
+                                result = root_note + chord_name[1:]
+                            elif len(chord_name) > 1 and chord_name[1] == 'm':
+                                result = root_note + chord_name[1:]
+                            else:
+                                result = root_note + (chord_name[1:] if len(chord_name) > 1 else '')
                             
-                            # Replace bass note placeholder with actual bass
-                            if '/' in result and actual_bass:
+                            if '/' not in result and actual_bass:
+                                result = result + '/' + actual_bass
+                            elif '/' in result and actual_bass:
                                 parts = result.split('/')
                                 result = parts[0] + '/' + actual_bass
                             
-                            result = self.clean_chord_name(result)
-                            return result
+                            final = self.clean_chord_name(result)
+                            score = len(chord_info['code'])
+                            candidates.append((score, final))
+        
+        if candidates:
+            # Sort by score descending
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            return candidates[0][1]
         
         return None
 
@@ -768,8 +753,6 @@ Cm13,023579a,"""
         if len(notes) < 3:
             return None
         
-        # Try bass note recognition first ONLY if we have 4+ unique notes
-        # or if the lowest note doesn't match typical chord roots
         unique_notes = []
         seen = set()
         for note in notes:
@@ -779,25 +762,28 @@ Cm13,023579a,"""
         
         if len(unique_notes) < 3:
             return None
-        
-        # Only try bass recognition if we have enough notes or unusual bass
-        if len(unique_notes) >= 3:  # Changed: allow bass recognition with 3+ unique notes (e.g. triads like C/E)
+            
+        candidates = [] 
+
+        # 1. Try Bass Logic (Specific bass note handling)
+        if len(unique_notes) >= 3:
             bass_chord = self.recognize_chord_with_bass(notes)
             if bass_chord:
-                return bass_chord
+                score = len(unique_notes) * 10
+                if '/' in bass_chord:
+                     score += 5
+                candidates.append((score, bass_chord))
         
-        # Convert notes to codes
+        # 2. Standard Logic
         note_codes = []
         for note in unique_notes:
             if note in self.note_to_code:
                 code = self.note_to_code[note]
                 note_codes.append(self.alphabet_to_number(code))
         
-        # Try each note as potential root
         tested_codes = set()
         
         for root_idx, root_code in enumerate(note_codes):
-            # Transpose all notes relative to this root
             transposed = []
             for code in note_codes:
                 diff = code - root_code
@@ -805,7 +791,6 @@ Cm13,023579a,"""
                     diff += 12
                 transposed.append(diff)
             
-            # Sort and convert back to code string
             transposed.sort()
             code_string = ''
             for num in transposed:
@@ -816,18 +801,14 @@ Cm13,023579a,"""
                 elif num == 11:
                     code_string += 'b'
             
-            # Skip if we've already tested this code
             if code_string in tested_codes:
                 continue
             tested_codes.add(code_string)
             
-            # Check if this code matches any known chord
             if code_string in self.code_to_chord_map:
-                # Get the chord name and transpose it
                 base_chord = self.code_to_chord_map[code_string]
                 root_note = unique_notes[root_idx]
                 
-                # Replace C with actual root
                 if base_chord.startswith('C'):
                     if len(base_chord) > 1 and base_chord[1] not in ['/', '#', 'b', 'm']:
                         final_chord = root_note + base_chord[1:]
@@ -836,9 +817,19 @@ Cm13,023579a,"""
                     else:
                         final_chord = root_note if len(base_chord) == 1 else root_note + base_chord[1:]
                     
-                    # Validate bass note if present
                     final_chord = self.validate_bass_note(final_chord, unique_notes)
-                    return self.clean_chord_name(final_chord)
+                    clean_name = self.clean_chord_name(final_chord)
+                    
+                    score = len(code_string) * 10
+                    if root_idx == 0:
+                        score += 2 # Root position bonus
+                        
+                    candidates.append((score, clean_name))
+        
+        if candidates:
+            # Sort by score descending -> Prefer more complex matches
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            return candidates[0][1]
         
         return None
     
@@ -948,7 +939,7 @@ Cm13,023579a,"""
 
     def init_ui(self):
         """Initialize the user interface."""
-        self.setWindowTitle("Chord Progression to MIDI Converter v1.4")
+        self.setWindowTitle("Chord Progression to MIDI Converter v1.4a antigravity")
         self.setGeometry(100, 100, 900, 750)
         
         # Set application style
