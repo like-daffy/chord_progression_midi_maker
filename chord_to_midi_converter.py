@@ -337,7 +337,7 @@ Cm7(add11),0357a,
 Cdim,036,
 C9,047ae,
 C9sus4,057ae,
-C9(11),047aei,
+C9(#11),047aei,
 Cm11,02357a,
 Cm11(b13),023578a,
 Cm11(b9),01357a,
@@ -1363,7 +1363,7 @@ Cm13,023579a,"""
         bass_code = None
         
         # Try exact match with bass note
-        if bass_note_str and normalized_chord + '/' + bass_note_str in self.chord_data:
+        if bass_note_str and root_note == 'C' and normalized_chord + '/' + bass_note_str in self.chord_data:
             chord_info = self.chord_data[normalized_chord + '/' + bass_note_str]
         # Try chord without bass note
         elif normalized_chord in self.chord_data:
