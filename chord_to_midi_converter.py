@@ -1426,6 +1426,17 @@ Cm13,023579a,"""
         
         return cleaned
     
+    def extract_chord_multiplier(self, token: str) -> Tuple[str, int]:
+        """Extract duration multiplier from chord token (e.g., 'Am(x2)' -> 'Am', 2)."""
+        # Case insensitive match for (xN) at end of string
+        match = re.search(r'\(x(\d+)\)$', token, re.IGNORECASE)
+        if match:
+            multiplier = int(match.group(1))
+            # Remove the suffix from the token
+            clean_token = token[:match.start()].strip()
+            return clean_token, multiplier
+        return token, 1
+    
     def parse_progression(self, progression_str: str) -> List[Dict[str, any]]:
         """Parse chord progression string with timing information."""
         # Regular expression to find brackets
@@ -1441,21 +1452,32 @@ Cm13,023579a,"""
                 # Split by separators: en/em dashes, or hyphen with spaces on both sides
                 # This preserves chord names like "Cm7-11" while splitting "Cm7 - Am"
                 chords = re.split(r'[–—]+|\s+-\s+', before_bracket)
-                for chord in chords:
-                    chord = self.sanitize_progression_token(chord)
-                    if chord:
-                        progression_items.append({'chord': chord, 'duration': 1.0})
+                for chord_token in chords:
+                    chord_token = self.sanitize_progression_token(chord_token)
+                    if chord_token:
+                        chord, multiplier = self.extract_chord_multiplier(chord_token)
+                        progression_items.append({'chord': chord, 'duration': 1.0 * multiplier})
             
             # Process chords in bracket
             bracket_content = match.group(1)
-            chords_in_bracket = re.split(r'[–—]+|\s+-\s+', bracket_content)
-            chords_in_bracket = [self.sanitize_progression_token(c) for c in chords_in_bracket]
-            chords_in_bracket = [c for c in chords_in_bracket if c]
+            chords_in_bracket_raw = re.split(r'[–—]+|\s+-\s+', bracket_content)
             
-            if chords_in_bracket:
-                duration = 1.0 / len(chords_in_bracket)
-                for chord in chords_in_bracket:
-                    progression_items.append({'chord': chord, 'duration': duration})
+            # First pass: parse all chords and multipliers to calculate total weight
+            parsed_bracket_chords = []
+            total_weight = 0
+            
+            for token in chords_in_bracket_raw:
+                token = self.sanitize_progression_token(token)
+                if token:
+                    chord, multiplier = self.extract_chord_multiplier(token)
+                    parsed_bracket_chords.append({'chord': chord, 'weight': multiplier})
+                    total_weight += multiplier
+            
+            if parsed_bracket_chords and total_weight > 0:
+                for item in parsed_bracket_chords:
+                    # Duration is proportional to weight within the bracket (which totals 1.0)
+                    duration = (item['weight'] / total_weight) * 1.0
+                    progression_items.append({'chord': item['chord'], 'duration': duration})
             
             current_pos = match.end()
         
@@ -1463,10 +1485,11 @@ Cm13,023579a,"""
         remaining = progression_str[current_pos:].strip()
         if remaining:
             chords = re.split(r'[–—]+|\s+-\s+', remaining)
-            for chord in chords:
-                chord = self.sanitize_progression_token(chord)
-                if chord:
-                    progression_items.append({'chord': chord, 'duration': 1.0})
+            for chord_token in chords:
+                chord_token = self.sanitize_progression_token(chord_token)
+                if chord_token:
+                    chord, multiplier = self.extract_chord_multiplier(chord_token)
+                    progression_items.append({'chord': chord, 'duration': 1.0 * multiplier})
         
         return progression_items
     
