@@ -1503,12 +1503,14 @@ class ChordToMIDIQt(QMainWindow):
                 QMessageBox.warning(self, "No Chords", "No valid chords found in the progression.")
                 return
             
+            total_duration = sum(item['duration'] for item in progression_items)
+            
             midi_file = self.midi_generator.create_midi(
                 progression_items, octave, self.bpm, unit_beats
             )
             
             self._save_and_display_midi(midi_file, progression_str, octave, unit_beats,
-                                        len(progression_items))
+                                        len(progression_items), total_duration)
             
         except ValueError as e:
             QMessageBox.critical(self, "Error", str(e))
@@ -1516,7 +1518,8 @@ class ChordToMIDIQt(QMainWindow):
             QMessageBox.critical(self, "Error", f"An error occurred: {e}")
     
     def _save_and_display_midi(self, midi_file: MIDIFile, progression_str: str,
-                               octave: int, unit_beats: float, chord_count: int):
+                               octave: int, unit_beats: float, chord_count: int,
+                               total_duration: float):
         """Save MIDI to temp file and update display."""
         # Generate filename
         safe_filename = re.sub(r'[^\w\s-]', '', progression_str[:30])
@@ -1533,11 +1536,14 @@ class ChordToMIDIQt(QMainWindow):
         
         # Update display
         unit_name = "Bar" if unit_beats == BEATS_PER_BAR else "Beat"
+        duration_str = f"{total_duration:g}"
+        
         info_text = (
             f"✓ MIDI File Created Successfully!\n\n"
             f"Chord Progression: {progression_str}\n"
             f"Octave: {octave} | BPM: {self.bpm} | Unit: {unit_name}\n"
-            f"Number of chords: {chord_count}\n\n"
+            f"Number of chords: {chord_count}\n"
+            f"Number of {unit_name}: {duration_str}\n\n"
             f"🎵 Click 'Preview' to listen to the MIDI\n"
             f"📁 Drag this area to Desktop or any folder to save the MIDI file\n"
             f"📥 Or drag a MIDI file here to convert it to chord progression\n"
