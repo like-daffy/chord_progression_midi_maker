@@ -165,14 +165,7 @@ echo Version: %VERSION%
 echo Platform: Windows x64
 echo ZIP Package: %ZIP_PATH%
 echo.
-echo Features:
-echo   ✓ Extended octave range (2-7, default 4)
-echo   ✓ Fixed bass note handling
-echo   ✓ BPM Control (1-300)
-echo   ✓ MIDI Preview (no mic access needed)
-echo   ✓ Drag-to-save functionality
-echo   ✓ Cmaj7 chord support
-echo.
+
 echo To distribute:
 echo   - Share the ZIP file: %ZIP_PATH%
 echo   - Users can extract and run ChordToMIDI.exe

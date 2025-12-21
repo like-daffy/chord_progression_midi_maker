@@ -146,7 +146,12 @@ if [ ! -f "ChordToMIDI.spec" ]; then
 fi
 
 # Build using PyInstaller with the spec file
-$ARCH_PREFIX pyinstaller ChordToMIDI.spec
+# If spec exists, use it. If not, use command below:
+if [ -f "ChordToMIDI.spec" ]; then
+    $ARCH_PREFIX pyinstaller ChordToMIDI.spec
+else
+    $ARCH_PREFIX pyinstaller --onefile --windowed --name "ChordToMIDI" --hidden-import pygame chord_to_midi_converter.py
+fi
 
 if [ $? -ne 0 ]; then
     echo
@@ -331,14 +336,7 @@ EOF
     echo "DMG Package: ${FINAL_DMG_PATH}"
     echo "Size: $(du -h "${FINAL_DMG_PATH}" | cut -f1)"
     echo
-    echo "Version Features:"
-    echo "  ✓ Extended octave range (2-7, default 4)"
-    echo "  ✓ Fixed bass note handling"
-    echo "  ✓ BPM Control (1-300)"
-    echo "  ✓ MIDI Preview (no mic access needed)"
-    echo "  ✓ Drag-to-save functionality"
-    echo "  ✓ Cmaj7 chord support"
-    echo
+
     echo "To distribute:"
     echo "  - Share the DMG file: ${FINAL_DMG_PATH}"
     echo "  - Users can drag the app to Applications folder"

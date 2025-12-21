@@ -2,11 +2,21 @@
 
 A professional desktop application for converting chord progressions into MIDI files with BPM control, real-time preview, and drag-to-save functionality. Now with **bi-directional MIDI support** - convert chords to MIDI or analyze MIDI files to extract chord progressions.
 
+## Connect with the Author 🎵
+
+I developed this tool to bridge the gap between Python programming and music production. 
+If you are a music producer or developer using this tool, I would love to hear your feedback!
+
+- **Feedback & Networking:** If you've created music using this tool, feel free to tag me or share your work!
+- **Contributions:** Pull requests and feature suggestions are always welcome. Let's make music production easier together.
+- **Contact:** https://x.com/sochan_life
+
 ## 🎵 Key Features
 
 ### Core Functionality
 - **40+ Chord Types**: Major, minor, seventh, suspended, augmented, diminished, and extended chords
 - **Smart Notation**: Automatic flat-to-sharp conversion (Bb→A#, Db→C#)
+- **Flexible Input**: Supports tight spacing (e.g. `A-B`) and auto-formatting
 - **Flexible Timing**: Single chords = 1 beat, bracketed chords share beats equally
 - **Slash Chord Support**: Bass notes automatically placed one octave lower
 - **Extended Octave Range**: Choose from octaves 2-7 (default: 4)
@@ -28,14 +38,14 @@ A professional desktop application for converting chord progressions into MIDI f
 pip install PyQt6 midiutil pygame
 
 # Run the application
-python chord_to_midi_converter_qt_v1.py
+python chord_to_midi_converter.py
 ```
 
 ### Using Requirements File
 
 ```bash
 # Install all dependencies
-pip install -r requirements_v1.txt
+pip install -r requirements.txt
 ```
 
 ### Minimal Installation (No Preview)
@@ -54,10 +64,12 @@ pip install PyQt6 midiutil
 1. **Set Parameters**
    - Select octave (2-7, default: 4)
    - Adjust BPM (1-300, default: 120)
+   - Choose Unit: **Bar** (4 beats) or **Beat** (1 beat)
 
 2. **Enter Chord Progression**
    - Use standard chord notation
-   - Separate chords with hyphens (-)
+   - Separate chords with hyphens (e.g., `A - B` or `A-B`)
+   - Flexible spacing is supported (spaces are optional)
 
 3. **Generate MIDI**
    - Click "Proceed" or press Enter
@@ -66,9 +78,13 @@ pip install PyQt6 midiutil
    - Click "▶ Preview" to listen
    - Click "■ Stop" to end playback
 
-5. **Save Your File**
+5. **Check Output**
+   - Success message shows total chord count and total **Number of Bars/Beats**
+   - Filename is auto-generated (e.g., `Am_G_BPM120.mid`)
+
+6. **Save Your File**
    - Drag the blue area to any folder
-   - File saves automatically with descriptive name
+   - Or keep the file in temp by dragging later
 
 #### 🎼 MIDI → Chords (New Feature)
 
@@ -161,32 +177,35 @@ Am - [F - G - C]           # F, G, C each get 1/3 beat
 ```
 
 ## 🛠️ Building Executables
-
-### Windows
-```cmd
-pyinstaller --onefile --windowed ^
-  --hidden-import pygame ^
-  --name "ChordToMIDI" ^
-  chord_to_midi_converter_qt_v1.py
-```
-
-### macOS
-```bash
-pyinstaller --onefile --windowed \
-  --hidden-import pygame \
-  --name "ChordToMIDI" \
-  --osx-bundle-identifier "com.chordtomidi.v1" \
-  chord_to_midi_converter_qt_v1.py
-```
-
-### Linux
-```bash
-pyinstaller --onefile --windowed \
-  --hidden-import pygame \
-  --name "ChordToMIDI" \
-  chord_to_midi_converter_qt_v1.py
-```
-
+ 
+ ### Automated Build Scripts
+ 
+ For **Windows** and **macOS**, simply use the provided build scripts in the root directory:
+ 
+ **macOS (Terminal):**
+ ```bash
+ ./build_macos.sh
+ # Follow the prompts to select architecture (Apple Silicon vs Intel)
+ ```
+ 
+ **Windows (PowerShell or Command Prompt):**
+ ```powershell
+ # Using PowerShell
+ .\build_windows.ps1
+ 
+ # Or using Batch
+ .\build_windows.bat
+ ```
+ 
+ ---
+ 
+ ### Manual Build (Linux)
+ ```bash
+ pyinstaller --onefile --windowed \
+   --hidden-import pygame \
+   --name "ChordToMIDI" \
+   chord_to_midi_converter.py
+ ```
 ## 📊 Technical Details
 
 ### Architecture
@@ -248,22 +267,25 @@ pyinstaller --onefile --windowed \
 
 ## 🎵 Examples
 
-### Pop Progression
+### Pop Progression (Flexible Input)
 ```
-C - G - Am - F
-BPM: 120, Octave: 4
+C-G-Am-F
+BPM: 120, Unit: Bar
+Output: 4 Bars
 ```
 
 ### Jazz Changes
 ```
 Dm7 - G7 - CM7 - A7
-BPM: 140, Octave: 4
+BPM: 140, Unit: Beat
+Output: 4 Beats
 ```
 
-### Complex with Bass
+### Complex with Bass & Brackets
 ```
 Am7/E - E/G# - [Am - Fmaj7] - F/C
-BPM: 90, Octave: 4
+BPM: 90, Unit: Bar
+Output: 4 Bars
 ```
 
 ### Workflow Example
@@ -276,21 +298,26 @@ BPM: 90, Octave: 4
 
 ## 📄 Files
 
-- `chord_to_midi_converter_qt_v1.py` - Main application
-- `requirements_v1.txt` - Dependencies
-- `README_v1.md` - This documentation
+- `chord_to_midi_converter.py` - Main application
+- `requirements.txt` - Dependencies
+- `README.md` - This documentation
 
 ## 📧 Support
 
 For issues or questions:
-1. Check the troubleshooting section
-2. Verify Python version (3.8+)
-3. Ensure dependencies are installed
-4. Test with simple progressions first
-5. For MIDI analysis issues, try simpler MIDI files
-
+1. Verify Python version (3.8+)
+2. Ensure dependencies are installed
+3. Test with simple progressions first
 ---
 
-**Version**: 1.2  
-**License**: For educational and personal use  
-**Dependencies**: PyQt6 (GPL/Commercial), pygame (LGPL), midiutil (MIT)
+## License
+
+This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)**. 
+As this tool is built upon [genkhord](https://github.com/shunshun-07/genkhord) (or appropriate link) and utilizes PyQt6, it is distributed in the spirit of open-source collaboration and freedom.
+
+You are free to use, modify, and distribute this software under the terms of the GPL-3.0. For more details, please see the [LICENSE](LICENSE) file in this repository.
+
+### Dependencies & Third-party Licenses
+- **[PyQt6](https://pypi.org/project/PyQt6/)**: GNU GPL v3.0 / Commercial
+- **[pygame](https://www.pygame.org/)**: GNU LGPL
+- **[midiutil](https://github.com/MarkCWirt/MIDIUtil)**: MIT License

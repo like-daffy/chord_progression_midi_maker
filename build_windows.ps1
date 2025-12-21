@@ -198,14 +198,7 @@ try {
     Write-Host "ZIP Package: $ZIP_PATH" -ForegroundColor Green
     Write-Host "Size: $FILE_SIZE MB"
     Write-Host ""
-    Write-Host "Features:" -ForegroundColor Cyan
-    Write-Host "  ✓ Extended octave range (2-7, default 4)"
-    Write-Host "  ✓ Fixed bass note handling"
-    Write-Host "  ✓ BPM Control (1-300)"
-    Write-Host "  ✓ MIDI Preview (no mic access needed)"
-    Write-Host "  ✓ Drag-to-save functionality"
-    Write-Host "  ✓ Cmaj7 chord support"
-    Write-Host ""
+
     Write-Host "To distribute:" -ForegroundColor Yellow
     Write-Host "  - Share the ZIP file: $ZIP_PATH"
     Write-Host "  - Users can extract and run ChordToMIDI.exe"
