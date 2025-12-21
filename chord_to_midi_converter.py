@@ -875,8 +875,28 @@ class MidiFileParser:
 class ProgressionParser:
     """Utility class for parsing chord progression strings."""
     
-    # Separator pattern: en-dash, em-dash, or hyphen with spaces
-    SEPARATOR_PATTERN = r'[–—]+|\s+-\s+'
+    # Separator pattern: en-dash, em-dash, or hyphen (flexible spacing)
+    SEPARATOR_PATTERN = r'\s*(?:[–—]+|-+)\s*'
+    
+    @classmethod
+    def normalize(cls, text: str) -> str:
+        """
+        Standardize the progression string.
+        - Fix spacing (e.g., 'A-B' -> 'A - B')
+        - Remove leading/trailing separators (e.g., '- A - B' -> 'A - B')
+        - Remove duplicate separators
+        """
+        if not text:
+            return ""
+        
+        # Split by separator pattern
+        parts = re.split(cls.SEPARATOR_PATTERN, text)
+        
+        # Filter out empty strings and clean each part
+        clean_parts = [p.strip() for p in parts if p and p.strip()]
+        
+        # Rejoin with standard separator
+        return ' - '.join(clean_parts)
     
     @classmethod
     def parse(cls, progression_str: str) -> List[Dict]:
@@ -1486,6 +1506,12 @@ class ChordToMIDIQt(QMainWindow):
         if not progression_str:
             QMessageBox.warning(self, "Input Required", "Please enter a chord progression.")
             return
+        
+        # Standardize input
+        normalized_str = ProgressionParser.normalize(progression_str)
+        if normalized_str != progression_str:
+            self.chord_input.setText(normalized_str)
+            progression_str = normalized_str
         
         # Validate brackets
         is_valid, error_msg = ProgressionParser.validate_brackets(progression_str)
